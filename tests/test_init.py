@@ -3,6 +3,7 @@ import pytest
 from gpgauth import GPGAuth
 
 
-def test_stage0():
-    ga = GPGAuth()
-    assert ga.requests is True
+def test_init_void():
+    # No Arguments, it fails
+    with pytest.raises(TypeError):
+        ga = GPGAuth()
