@@ -19,81 +19,138 @@
 
 import requests
 import logging
+import re
 import uuid
 
 from distutils.version import StrictVersion
+from gnupg import GPG, _parsers as GPG_parsers
+
+from tempfile import TemporaryDirectory
 
 from .exceptions import GPGAuthException
 
 # This is passbolt_api's version
-GPGAUTH_MINVERSION = '1.3.0'
+GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
 logger = logging.getLogger(__name__)
 
+# Bugfix for https://github.com/isislovecruft/python-gnupg/issues/207
+GPG_parsers.Verify.TRUST_LEVELS["ENCRYPTION_COMPLIANCE_MODE"] = 23
 
 class GPGAuth:
     """ GPGAuth client Class """
 
-    def __init__(self, root_url, fingerprint):
-        self.root_url = root_url
-        self.fingerprint = fingerprint
+    def __init__(self, server_url, server_fingerprint, user_private_key_file, http_username=None, http_password=None):
+        # Strip trailing slashes
+        self.server_url = re.sub(r'/$', '', server_url)
+        self.serverkey_imported = False
+        self._server_fingerprint = server_fingerprint
+        self.requests = requests.Session()
+        if http_username and http_password:
+           self.requests.auth = requests.auth.HTTPBasicAuth(http_username, http_password)
+        with open(user_private_key_file, 'r') as key:
+          logger.info('Importing the user private key file; password prompt expected')
+          import_result = self.gpg.import_keys(key.read())
+          if len(import_result.fingerprints) < 1:
+            raise GPGAuthException('No key could be imported')
+          else:
+            [logger.info('GPG key 0x%s successfully imported' % key) for key in import_result.fingerprints]
+            self.user_fingerprint = import_result.fingerprints.pop()
 
     @property
-    def _verifyToken(self):
+    def gpg(self):
+        try:
+            self._gpg
+        except AttributeError:
+            # Instantiate GnuPG in a specific directory
+            self._gpg = GPG(homedir=TemporaryDirectory(prefix='gpgauth').name)
+        return self._gpg
+
+
+    @property
+    def _nonce0(self):
       try:
-          self.__verifyToken
+          self.__nonce0
       except AttributeError:
-          self.__verifyToken  = 'gpgauthv1.3.0|36|';
-          self.__verifyToken += uuid.uuid4().hex;
-          self.__verifyToken += '|gpgauthv1.3.0';
-      return self.__verifyToken
+          # This format is stolen from https://github.com/passbolt/passbolt_cli/blob/master/app/models/gpgAuthToken.js
+          self.__nonce0  = 'gpgauthv1.3.0|36|';
+          self.__nonce0 += str(uuid.uuid4());
+          self.__nonce0 += '|gpgauthv1.3.0';
+      return self.__nonce0
 
-
-    def stage0(self):
-        return self.verify_server_identity()
 
     def verify_gpgauth_version(self):
-        try:
+        if hasattr(self, 'gpgauth_version_ok'):
             return self.gpgauth_version_ok == True
-        except AttributeError:
-            logger.info('Verify support and version')
-            r = requests.head(self.root_url + '/auth/')
-            if 'X-GPGAuth-Version' not in r.headers:
-                raise GPGAuthException("GPGAuth support not announced by %s" % self.root_url)
-            if StrictVersion(r.headers['X-GPGAuth-Version']) < StrictVersion(GPGAUTH_MINVERSION):
-                raise GPGAuthException("GPGAuth Version too low (%s < %s)" % (r.headers['X-GPGAuth-Version'], GPGAUTH_MINVERSION))
-            self.gpgauth_version_ok = True
 
-            # Take the information from the server if they give them
-            self.login_url = self.root_url + '/auth/login'
-            if 'X-GPGAuth-Login-Url' in r.headers:
-                self.login_url = self.root_url + r.headers['X-GPGAuth-Login-Url']
+        r = self.requests.head(self.server_url + '/auth/')
+        if 'X-GPGAuth-Version' not in r.headers:
+            raise GPGAuthException("GPGAuth support not announced by %s" % self.server_url)
+        if r.headers['X-GPGAuth-Version'] != GPGAUTH_SUPPORTED_VERSION:
+            raise GPGAuthException("GPGAuth Version not supported (%s != %s)" % (r.headers['X-GPGAuth-Version'], GPGAUTH_SUPPORTED_VERSION))
+        self.gpgauth_version_ok = True
 
-    def verify_server_identity(self):
+        # Take the information from the server if they give them
+        self.verify_url = self.server_url + '/auth/verify.json'
+        # This is broken. Without the .json postfix, it breaks
+        #if 'X-GPGAuth-Verify-Url' in r.headers:
+            #self.verify_url = self.server_url + r.headers['X-GPGAuth-Verify-Url']
+        logger.info('verify_gpgauth_version(): OK')
+
+    @property
+    def server_fingerprint(self):
+        if self.serverkey_imported:
+            return self._server_fingerprint
+
+        # Prerequisite
         self.verify_gpgauth_version()
 
-        print(self._verifyToken)
+        r = self.requests.get(self.verify_url)
+        if r.json()['body']['fingerprint'] != self._server_fingerprint:
+            raise GPGAuthException("Hoped server fingerprint %s doesn't match the server's %s." % (self._server_fingerprint, r.json()['body']['fingerprint']))
+        import_result = self.gpg.import_keys(r.json()['body']['keydata'])
+        if self._server_fingerprint not in import_result.fingerprints:
+            raise GPGAuthException("Hoped server fingerprint %s doesn't match the server key." % self._server_fingerprint)
+        logger.info('server_fingerprint(): 0x%s imported successfully' % self._server_fingerprint)
+        self.serverkey_imported = True
 
-    #this._generateVerifyToken();
+        return self._server_fingerprint
 
-    #return Crypto
-      #.encrypt(this.domain.publicKey.fingerprint, this.token)
-      #.then(function(encrypted) {
-        #return _this.post({
-          #url: _this.URL_VERIFY,
-          #form: {
-            #'data[gpg_auth][keyid]' : _this.user.privateKey.fingerprint,
-            #'data[gpg_auth][server_verify_token]' : encrypted
-          #}
-        #});
-      #})
-      #.then(function(results) {
-        #return _this._onVerifyResponse(results);
-      #})
-      #.catch(function(err) {
-        #throw err;
-      #});
-  #}
+    def verify_server_identity(self):
+        """ GPGAuth stage0 """
+        self.verify_gpgauth_version()
+        # Encrypt a uuid token for the server
+        server_verify_token = self.gpg.encrypt(self._nonce0, self.server_fingerprint)
+        if not server_verify_token.ok:
+            raise GPGAuthException('Encryption of the nonce0 (%s) to the server fingerprint (%s) failed.' % (self._nonce0, self.server_fingerprint))
 
-        #print(self.gpgauth_version_ok)
-        return False
+        r = self.requests.post(self.verify_url,
+                               json = {
+                                   'gpg_auth': {
+                                       'keyid': self.user_fingerprint,
+                                       'server_verify_token': str(server_verify_token)
+                                    }
+                                })
+
+        validation_errors = []
+        if r.headers['X-GPGAuth-Authenticated'] != 'false':
+            validation_errors.append(GPGAuthException('X-GPGAuth-Authenticated should be set to false during the verify stage'))
+        if r.headers['X-GPGAuth-Progress'] != 'stage0':
+            validation_errors.append(GPGAuthException('X-GPGAuth-Progress should be set to stage0 during the verify stage'))
+        if 'X-GPGAuth-User-Auth-Token' in r.headers:
+            validation_errors.append(GPGAuthException('X-GPGAuth-User-Auth-Token should not be set during the verify stage'))
+        if 'X-GPGAuth-Verify-Response' not in r.headers:
+            validation_errors.append(GPGAuthException('X-GPGAuth-Verify-Response should be set during the verify stage'))
+        if 'X-GPGAuth-Refer' in r.headers:
+            validation_errors.append(GPGAuthException('X-GPGAuth-Refer should not be set during verify stage'))
+
+        if validation_errors:
+            logger.warning(r.headers)
+            raise validation_errors.pop()
+
+        if r.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
+            raise GPGAuthException('The server decrypted something different than what we sent (%s <> %s)' % (r.headers['X-GPGAuth-Verify-Response'], self._nonce0))
+        logger.info('verify_server_identity(): OK')
+
+    # GPGAuth stages in numerical form
+    stage0 = verify_server_identity
