@@ -22,7 +22,6 @@ import logging
 import re
 import uuid
 
-from distutils.version import StrictVersion
 from gnupg import GPG, _parsers as GPG_parsers
 
 from tempfile import TemporaryDirectory
