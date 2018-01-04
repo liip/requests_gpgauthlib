@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # python-gpgauth -- A GPGAuth Client in Python
-# Copyright (C) 2017 Didier Raboud <odyx@liip.ch>
+# Copyright (C) 2018 Didier Raboud <odyx@liip.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
+
 
 class GPGAuthException(Exception):
     """ Base GPGAuth Exception """
@@ -35,4 +36,3 @@ class GPGAuthStage1Exception(Exception):
 class GPGAuthStage2Exception(Exception):
     """ Base GPGAuth stage2 (Authentication) Exception """
     pass
-

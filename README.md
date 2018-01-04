@@ -1,2 +1,2 @@
-python-gpgauth - A GPGAuth Client in Python
-===========================================
+python-gpgauth-cli - A GPGAuth Client in Python
+===============================================

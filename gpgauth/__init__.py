@@ -1,1 +1,1 @@
-from .GpgAuth import GPGAuth
+from .GpgAuth import GPGAuth  # noqa
