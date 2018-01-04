@@ -9,4 +9,5 @@ setup(name='python-gpgauth-cli',
       author_email='odyx@liip.ch',
       url='https://github.com/liip/python-gpgauth-cli',
       install_requires=['gnupg', 'requests'],
+      tests_require=['pytest'],
       )
