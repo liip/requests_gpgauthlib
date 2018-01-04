@@ -22,3 +22,17 @@ class GPGAuthException(Exception):
     pass
 
 
+class GPGAuthStage0Exception(Exception):
+    """ GPGAuth stage0 (server verification) Exception """
+    pass
+
+
+class GPGAuthStage1Exception(Exception):
+    """ Base GPGAuth stage1 (login) Exception """
+    pass
+
+
+class GPGAuthStage2Exception(Exception):
+    """ Base GPGAuth stage2 (Authentication) Exception """
+    pass
+

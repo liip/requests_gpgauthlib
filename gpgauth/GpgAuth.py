@@ -23,6 +23,7 @@ import re
 import uuid
 
 from gnupg import GPG, _parsers as GPG_parsers
+from urllib.parse import unquote_plus
 
 from tempfile import TemporaryDirectory
 
@@ -33,8 +34,11 @@ GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
 logger = logging.getLogger(__name__)
 
-# Bugfix for https://github.com/isislovecruft/python-gnupg/issues/207
+# Hide various error messages for https://github.com/isislovecruft/python-gnupg/issues/207
 GPG_parsers.Verify.TRUST_LEVELS["ENCRYPTION_COMPLIANCE_MODE"] = 23
+GPG_parsers.Verify.TRUST_LEVELS["DECRYPTION_KEY"] = 24
+GPG_parsers.Verify.TRUST_LEVELS["VERIFICATION_COMPLIANCE_MODE"] = 25
+
 
 class GPGAuth:
     """ GPGAuth client Class """
@@ -44,11 +48,12 @@ class GPGAuth:
         self.server_url = re.sub(r'/$', '', server_url)
         self.serverkey_imported = False
         self._server_fingerprint = server_fingerprint
-        self.requests = requests.Session()
+        self._requests = requests.Session()
         if http_username and http_password:
-           self.requests.auth = requests.auth.HTTPBasicAuth(http_username, http_password)
+           self._requests.auth = requests.auth.HTTPBasicAuth(http_username, http_password)
         with open(user_private_key_file, 'r') as key:
           logger.info('Importing the user private key file; password prompt expected')
+          print('python-gpgauth: Importing the user private key file; password prompt expected')
           import_result = self.gpg.import_keys(key.read())
           if len(import_result.fingerprints) < 1:
             raise GPGAuthException('No key could be imported')
@@ -62,8 +67,18 @@ class GPGAuth:
             self._gpg
         except AttributeError:
             # Instantiate GnuPG in a specific directory
-            self._gpg = GPG(homedir=TemporaryDirectory(prefix='gpgauth').name)
+            self._gpg = GPG(
+              homedir=TemporaryDirectory(prefix='gpgauth').name,
+              use_agent=True,
+            )
         return self._gpg
+
+    @property
+    def requests(self):
+        """ Return a python-requests Object, with an authenticated GPGAuth context """
+        if not hasattr(self, '_authenticated_url'):
+            self.authenticate_with_token()
+        return self._requests
 
 
     @property
@@ -77,23 +92,34 @@ class GPGAuth:
           self.__nonce0 += '|gpgauthv1.3.0';
       return self.__nonce0
 
+    @property
+    def user_auth_token(self):
+      try:
+        self._user_auth_token
+      except AttributeError:
+        self.login()
+      return self._user_auth_token
+
+    @property
+    def login_url(self):
+      if not hasattr(self, '_login_url'):
+          self.verify_gpgauth_version()
+      return self._login_url
 
     def verify_gpgauth_version(self):
         if hasattr(self, 'gpgauth_version_ok'):
             return self.gpgauth_version_ok == True
 
-        r = self.requests.head(self.server_url + '/auth/')
+        r = self._requests.head(self.server_url + '/auth/')
         if 'X-GPGAuth-Version' not in r.headers:
             raise GPGAuthException("GPGAuth support not announced by %s" % self.server_url)
         if r.headers['X-GPGAuth-Version'] != GPGAUTH_SUPPORTED_VERSION:
             raise GPGAuthException("GPGAuth Version not supported (%s != %s)" % (r.headers['X-GPGAuth-Version'], GPGAUTH_SUPPORTED_VERSION))
         self.gpgauth_version_ok = True
 
-        # Take the information from the server if they give them
+        # We know the URLs from the server are broken (no .json postfix), use our own.
         self.verify_url = self.server_url + '/auth/verify.json'
-        # This is broken. Without the .json postfix, it breaks
-        #if 'X-GPGAuth-Verify-Url' in r.headers:
-            #self.verify_url = self.server_url + r.headers['X-GPGAuth-Verify-Url']
+        self._login_url = self.server_url + '/auth/login.json'
         logger.info('verify_gpgauth_version(): OK')
 
     @property
@@ -104,7 +130,7 @@ class GPGAuth:
         # Prerequisite
         self.verify_gpgauth_version()
 
-        r = self.requests.get(self.verify_url)
+        r = self._requests.get(self.verify_url)
         if r.json()['body']['fingerprint'] != self._server_fingerprint:
             raise GPGAuthException("Hoped server fingerprint %s doesn't match the server's %s." % (self._server_fingerprint, r.json()['body']['fingerprint']))
         import_result = self.gpg.import_keys(r.json()['body']['keydata'])
@@ -117,13 +143,18 @@ class GPGAuth:
 
     def verify_server_identity(self):
         """ GPGAuth stage0 """
+        if hasattr(self, '_server_identity_verified'):
+            return
+
+        # Prerequisite
         self.verify_gpgauth_version()
+
         # Encrypt a uuid token for the server
         server_verify_token = self.gpg.encrypt(self._nonce0, self.server_fingerprint)
         if not server_verify_token.ok:
-            raise GPGAuthException('Encryption of the nonce0 (%s) to the server fingerprint (%s) failed.' % (self._nonce0, self.server_fingerprint))
+            raise GPGAuthStage0Exception('Encryption of the nonce0 (%s) to the server fingerprint (%s) failed.' % (self._nonce0, self.server_fingerprint))
 
-        r = self.requests.post(self.verify_url,
+        r = self._requests.post(self.verify_url,
                                json = {
                                    'gpg_auth': {
                                        'keyid': self.user_fingerprint,
@@ -133,23 +164,88 @@ class GPGAuth:
 
         validation_errors = []
         if r.headers['X-GPGAuth-Authenticated'] != 'false':
-            validation_errors.append(GPGAuthException('X-GPGAuth-Authenticated should be set to false during the verify stage'))
+            validation_errors.append(GPGAuthStage0Exception('X-GPGAuth-Authenticated should be set to false during the verify stage'))
         if r.headers['X-GPGAuth-Progress'] != 'stage0':
-            validation_errors.append(GPGAuthException('X-GPGAuth-Progress should be set to stage0 during the verify stage'))
+            validation_errors.append(GPGAuthStage0Exception('X-GPGAuth-Progress should be set to stage0 during the verify stage'))
         if 'X-GPGAuth-User-Auth-Token' in r.headers:
-            validation_errors.append(GPGAuthException('X-GPGAuth-User-Auth-Token should not be set during the verify stage'))
+            validation_errors.append(GPGAuthStage0Exception('X-GPGAuth-User-Auth-Token should not be set during the verify stage'))
         if 'X-GPGAuth-Verify-Response' not in r.headers:
-            validation_errors.append(GPGAuthException('X-GPGAuth-Verify-Response should be set during the verify stage'))
+            validation_errors.append(GPGAuthStage0Exception('X-GPGAuth-Verify-Response should be set during the verify stage'))
         if 'X-GPGAuth-Refer' in r.headers:
-            validation_errors.append(GPGAuthException('X-GPGAuth-Refer should not be set during verify stage'))
+            validation_errors.append(GPGAuthStage0Exception('X-GPGAuth-Refer should not be set during verify stage'))
 
         if validation_errors:
             logger.warning(r.headers)
             raise validation_errors.pop()
 
         if r.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
-            raise GPGAuthException('The server decrypted something different than what we sent (%s <> %s)' % (r.headers['X-GPGAuth-Verify-Response'], self._nonce0))
+            raise GPGAuthStage0Exception('The server decrypted something different than what we sent (%s <> %s)' % (r.headers['X-GPGAuth-Verify-Response'], self._nonce0))
+        self._server_identity_verified = True
         logger.info('verify_server_identity(): OK')
+
+    def login(self):
+        """ GPGAuth Stage1 - get and decrypt a verification given by the server """
+        if hasattr(self, '_user_auth_token'):
+            return
+
+        # Prerequisite
+        self.verify_server_identity()
+
+        r = self._requests.post(self.login_url, json = {'gpg_auth': { 'keyid': self.user_fingerprint }})
+
+        validation_errors = []
+        if r.headers['X-GPGAuth-Authenticated'] != 'false':
+            validation_errors.append(GPGAuthStage1Exception('X-GPGAuth-Authenticated should be set to false during the login stage'))
+        if r.headers['X-GPGAuth-Progress'] != 'stage1':
+            validation_errors.append(GPGAuthStage1Exception('X-GPGAuth-Progress should be set to stage1 during the login stage'))
+        if 'X-GPGAuth-User-Auth-Token' not in r.headers:
+            validation_errors.append(GPGAuthStage1Exception('X-GPGAuth-User-Auth-Token should be set during the login stage'))
+        if 'X-GPGAuth-Verify-Response' in r.headers:
+            validation_errors.append(GPGAuthStage1Exception('X-GPGAuth-Verify-Response should not be set during the login stage'))
+        if 'X-GPGAuth-Refer' in r.headers:
+            validation_errors.append(GPGAuthStage1Exception('X-GPGAuth-Refer should not be set during login stage'))
+
+        if validation_errors:
+            logger.warning(r.headers)
+            raise validation_errors.pop()
+
+        # Get the encrypted User Auth Token
+        encrypted_user_auth_token = unquote_plus(r.headers['X-GPGAuth-User-Auth-Token'].replace('\\\\', '\\')).replace('\\ ', ' ')
+        logger.info('Decrypting the user authentication token; password prompt expected')
+        print('python-gpgauth: Decrypting the user authentication token; password prompt expected')
+        self._user_auth_token = str(self.gpg.decrypt(encrypted_user_auth_token, always_trust=True))
+        logger.info('login(): OK')
+
+
+    def authenticate_with_token(self):
+        """ GPGAuth Stage 2. send back the token to the server to get auth cookie """
+
+        r = self._requests.post(self.login_url, json = {'gpg_auth': {
+          'keyid': self.user_fingerprint,
+          'user_token_result': self.user_auth_token,
+        }})
+
+        validation_errors = []
+        if r.headers['X-GPGAuth-Authenticated'] != 'true':
+            validation_errors.append(GPGAuthStage2Exception('X-GPGAuth-Authenticated should be set to true when GPGAuth is complete'))
+        if r.headers['X-GPGAuth-Progress'] != 'complete':
+            validation_errors.append(GPGAuthStage2Exception('X-GPGAuth-Progress should be set to complete during final stage'))
+        if 'X-GPGAuth-User-Auth-Token' in r.headers:
+            validation_errors.append(GPGAuthStage2Exception('X-GPGAuth-User-Auth-Token should not be set during final stage'))
+        if 'X-GPGAuth-Verify-Response' in r.headers:
+            validation_errors.append(GPGAuthStage2Exception('X-GPGAuth-Verify-Response should not be set during the final stage'))
+        if 'X-GPGAuth-Refer' not in r.headers:
+            validation_errors.append(GPGAuthStage2Exception('X-GPGAuth-Refer should be set during login stage'))
+
+        if validation_errors:
+            logger.warning(r.headers)
+            raise validation_errors.pop()
+
+        # Get the encrypted User Auth Token
+        self._authenticated_url = self.server_url + r.headers['X-GPGAuth-Refer']
+        logger.info('authenticate_with_token(): OK — Now go to %s' % self._authenticated_url)
 
     # GPGAuth stages in numerical form
     stage0 = verify_server_identity
+    stage1 = login
+    stage2 = authenticate_with_token
