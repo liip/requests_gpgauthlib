@@ -24,3 +24,13 @@ ga.stage2()
 
 
 # Bonus: if you access ga.requests directly, it will attempt a login at first use.
+
+# On a passbolt server, try:
+
+all_resources = ga.requests.get(ga.server_url + '/resources.json').json()['body']
+first_resource = all_resources[0]
+
+name = first_resource['Resource']['name']
+secret = ga.gpg.decrypt(first_resource['Secret'][0]['data'], always_trust=True)
+
+print("My secret %s: %s" % (name, secret))

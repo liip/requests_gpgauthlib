@@ -27,7 +27,7 @@ from urllib.parse import unquote_plus
 
 from tempfile import TemporaryDirectory
 
-from .exceptions import GPGAuthException
+from .exceptions import GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception, GPGAuthStage2Exception
 
 # This is passbolt_api's version
 GPGAUTH_SUPPORTED_VERSION = '1.3.0'
