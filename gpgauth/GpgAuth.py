@@ -78,7 +78,9 @@ class GPGAuth:
         except AttributeError:
             # Instantiate GnuPG in a specific directory
             self._gpg = GPG(
-                    homedir=TemporaryDirectory(prefix='gpgauth').name,
+                    homedir=TemporaryDirectory(
+                      prefix='python-gpgauth-cli-'
+                    ).name,
                     use_agent=True,
                     )
             return self._gpg
