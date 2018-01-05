@@ -83,7 +83,7 @@ class GPGAuth:
                     ).name,
                     use_agent=True,
                     )
-            return self._gpg
+        return self._gpg
 
     @property
     def requests(self):
@@ -231,8 +231,8 @@ class GPGAuth:
         logger.info('verify_server_identity(): OK')
 
     def login(self):
-        """ GPGAuth Stage1 - get and decrypt a verification given by the """
-        """ server """
+        """ GPGAuth Stage1 """
+        """ Get and decrypt a verification given by the server """
         if hasattr(self, '_user_auth_token'):
             return
 
@@ -273,8 +273,7 @@ class GPGAuth:
         encrypted_user_auth_token = unquote_plus(
             r.headers['X-GPGAuth-User-Auth-Token']
             .replace('\\\\', '\\')
-            .replace('\\ ', ' ')
-        )
+        ).replace('\\ ', ' ')
         logger.info('Decrypting the user authentication token; '
                     'password prompt expected')
         print('python-gpgauth: Decrypting the user authentication token; '
