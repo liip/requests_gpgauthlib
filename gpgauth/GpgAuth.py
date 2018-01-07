@@ -20,7 +20,7 @@ import logging
 import re
 import uuid
 
-from gnupg import GPG, _parsers as GPG_parsers
+from gnupg import GPG
 from urllib.parse import unquote_plus
 
 from tempfile import TemporaryDirectory
@@ -34,12 +34,6 @@ from .exceptions import (
 GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
 logger = logging.getLogger(__name__)
-
-# Hide various error messages
-# Addresses https://github.com/isislovecruft/python-gnupg/issues/207 at least
-GPG_parsers.Verify.TRUST_LEVELS["ENCRYPTION_COMPLIANCE_MODE"] = 23
-GPG_parsers.Verify.TRUST_LEVELS["DECRYPTION_KEY"] = 24
-GPG_parsers.Verify.TRUST_LEVELS["VERIFICATION_COMPLIANCE_MODE"] = 25
 
 
 class GPGAuth:
