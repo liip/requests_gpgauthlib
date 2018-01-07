@@ -41,13 +41,15 @@ logger = logging.getLogger(__name__)
 class GPGAuth:
     """ GPGAuth client Class """
 
-    def __init__(self, server_url, server_fingerprint, user_private_key_file,
+    def __init__(self, server_url, server_fingerprint, user_private_key_file=None,
+                 permanent_gnupghomedir=False,
                  http_username=None, http_password=None):
         # Strip trailing slash
         self.server_url = re.sub(r'/$', '', server_url)
         self.serverkey_imported = False
         self._server_fingerprint = server_fingerprint
         self._user_private_key_file = user_private_key_file
+        self._permanent_gnupghomedir = permanent_gnupghomedir
         self._requests = requests.Session()
         self._requests.headers.update({'User-Agent': 'python-gpgauth-cli'})
 
@@ -119,11 +121,13 @@ class GPGAuth:
             self._gpg
         except AttributeError:
             # Instantiate GnuPG in a specific directory
-            self._gpghomedir = TemporaryDirectory(prefix='python-gpgauth-cli-')
+            _gpghomedirname = os.path.join(self.workdir, 'gnupg-homedir')
+            if not self._permanent_gnupghomedir:
+                # Instantiate this as a class attribute to let it be destroyed automagically
+                self._temporarygpghomedir = TemporaryDirectory(prefix='python-gpgauth-cli-')
+                _gpghomedirname = self._temporarygpghomedir.name
             self._gpg = GPG(
-                    homedir=self._gpghomedir.name,
-                    binary='/usr/bin/gpg2',
-                    verbose=True,
+                    homedir=_gpghomedirname,
                     )
         return self._gpg
 
