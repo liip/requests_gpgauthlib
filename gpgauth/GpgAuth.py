@@ -18,9 +18,11 @@
 import requests
 import logging
 import re
+import os
 import uuid
 
 from gnupg import GPG
+from http.cookiejar import MozillaCookieJar
 from urllib.parse import unquote_plus
 
 from tempfile import TemporaryDirectory
@@ -45,25 +47,55 @@ class GPGAuth:
         self.server_url = re.sub(r'/$', '', server_url)
         self.serverkey_imported = False
         self._server_fingerprint = server_fingerprint
+        self._user_private_key_file = user_private_key_file
         self._requests = requests.Session()
+        self._requests.headers.update({'User-Agent': 'python-gpgauth-cli'})
+
+        # Eventual Basic Authentication
         if http_username and http_password:
             self._requests.auth = \
                     requests.auth.HTTPBasicAuth(http_username, http_password)
-        with open(user_private_key_file, 'r') as key:
-            logger.info(
-                    'Importing the user private key; password prompt expected'
-                    )
-            print('python-gpgauth:'
-                  ' Importing the user private key; password prompt expected')
-            import_result = self.gpg.import_keys(key.read())
-            if len(import_result.fingerprints) < 1:
-                raise GPGAuthException('No key could be imported')
-            else:
-                [
-                    logger.info('GPG key 0x%s successfully imported' % key)
-                    for key in import_result.fingerprints
-                ]
-                self.user_fingerprint = import_result.fingerprints.pop()
+
+        # Try to recover the session cookie
+        _user = os.environ.get('HOME')
+        if not _user:
+            _user = '/tmp/python-gpgauth-cli'
+            try:
+                os.makedirs(_user)
+            except (OSError, IOError):
+                _user = os.getcwd()
+        _cookiestorage = os.path.join(os.path.join(_user, '.config'), 'python-gpgauth-cli')
+        try:
+            os.makedirs(_cookiestorage, exist_ok=True)
+            self._requests_cookie_filename = os.path.join(_cookiestorage, 'requests_cookies')
+            self._requests.cookies = MozillaCookieJar(self._requests_cookie_filename)
+            try:
+                self._requests.cookies.load()
+            except FileNotFoundError:
+                pass
+        except (OSError, IOError):
+            pass
+
+    @property
+    def user_fingerprint(self):
+        try:
+            self._user_fingerprint
+        except AttributeError:
+          # Import the user private key
+          with open(self._user_private_key_file, 'r') as key:
+              logger.info(
+                      'Importing the user private key; password prompt expected'
+                      )
+              import_result = self._gpg.import_keys(key.read())
+              if len(import_result.fingerprints) < 1:
+                  raise GPGAuthException('No key could be imported')
+              else:
+                  [
+                      logger.info('GPG key 0x%s successfully imported' % key)
+                      for key in import_result.fingerprints
+                  ]
+                  self._user_fingerprint = import_result.fingerprints.pop()
+        return self._user_fingerprint
 
     @property
     def gpg(self):
@@ -74,15 +106,19 @@ class GPGAuth:
             self._gpghomedir = TemporaryDirectory(prefix='python-gpgauth-cli-')
             self._gpg = GPG(
                     homedir=self._gpghomedir.name,
+                    binary='/usr/bin/gpg2',
+                    verbose=True,
                     )
+        # Make sure to load the user fingerprint
+        self.user_fingerprint
         return self._gpg
 
     @property
     def requests(self):
         """ Return a python-requests Object       """
         """ with an authenticated GPGAuth context """
-        if not hasattr(self, '_authenticated_url'):
-            self.authenticate_with_token()
+        if not self.is_authenticated():
+          self.authenticate_with_token()
         return self._requests
 
     @property
@@ -268,8 +304,6 @@ class GPGAuth:
         ).replace('\\ ', ' ')
         logger.info('Decrypting the user authentication token; '
                     'password prompt expected')
-        print('python-gpgauth: Decrypting the user authentication token; '
-              'password prompt expected')
         self._user_auth_token = str(
             self.gpg.decrypt(encrypted_user_auth_token, always_trust=True)
         )
@@ -314,8 +348,13 @@ class GPGAuth:
         self._authenticated_url = (
             self.server_url + r.headers['X-GPGAuth-Refer']
         )
+        self._requests.cookies.save()
         logger.info('authenticate_with_token(): OK — '
                     'Now go to %s' % self._authenticated_url)
+
+    def is_authenticated(self):
+        r = self._requests.get(self.server_url + '/auth/checkSession.json')
+        return r.status_code != 403
 
     # GPGAuth stages in numerical form
     stage0 = verify_server_identity
