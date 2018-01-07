@@ -56,25 +56,33 @@ class GPGAuth:
             self._requests.auth = \
                     requests.auth.HTTPBasicAuth(http_username, http_password)
 
-        # Try to recover the session cookie
-        _user = os.environ.get('HOME')
-        if not _user:
-            _user = '/tmp/python-gpgauth-cli'
-            try:
-                os.makedirs(_user)
-            except (OSError, IOError):
-                _user = os.getcwd()
-        _cookiestorage = os.path.join(os.path.join(_user, '.config'), 'python-gpgauth-cli')
+        self._requests_cookie_filename = os.path.join(self.workdir, 'requests_cookies')
+        self._requests.cookies = MozillaCookieJar(self._requests_cookie_filename)
         try:
-            os.makedirs(_cookiestorage, exist_ok=True)
-            self._requests_cookie_filename = os.path.join(_cookiestorage, 'requests_cookies')
-            self._requests.cookies = MozillaCookieJar(self._requests_cookie_filename)
-            try:
-                self._requests.cookies.load()
-            except FileNotFoundError:
-                pass
-        except (OSError, IOError):
+            self._requests.cookies.load()
+        except FileNotFoundError:
             pass
+
+
+    @property
+    def workdir(self):
+        try:
+            self._workdir
+        except AttributeError:
+            # Setup our home
+            _user = os.environ.get('HOME')
+            if not _user:
+                _user = '/tmp/python-gpgauth-cli'
+                try:
+                    os.makedirs(_user)
+                except (OSError, IOError):
+                    _user = os.getcwd()
+            self._workdir = os.path.join(os.path.join(_user, '.config'), 'python-gpgauth-cli')
+            try:
+                os.makedirs(self._workdir)
+            except (OSError, IOError):
+                pass
+        return self._workdir
 
     @property
     def user_fingerprint(self):
@@ -86,7 +94,7 @@ class GPGAuth:
               logger.info(
                       'Importing the user private key; password prompt expected'
                       )
-              import_result = self._gpg.import_keys(key.read())
+              import_result = self.gpg_raw.import_keys(key.read())
               if len(import_result.fingerprints) < 1:
                   raise GPGAuthException('No key could be imported')
               else:
@@ -97,8 +105,16 @@ class GPGAuth:
                   self._user_fingerprint = import_result.fingerprints.pop()
         return self._user_fingerprint
 
+
     @property
     def gpg(self):
+        """ To be used when you need the GPG with a private key loaded """
+        self.user_fingerprint
+        return self.gpg_raw
+
+    @property
+    def gpg_raw(self):
+        """ To be used when you need the no-fingerprint GPG """
         try:
             self._gpg
         except AttributeError:
@@ -109,8 +125,6 @@ class GPGAuth:
                     binary='/usr/bin/gpg2',
                     verbose=True,
                     )
-        # Make sure to load the user fingerprint
-        self.user_fingerprint
         return self._gpg
 
     @property
