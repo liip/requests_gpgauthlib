@@ -1,0 +1,2 @@
+requests
+git+https://github.com/OdyX/python-gnupg.git@bb2eb8134660930f2c6a1528a334fdd5e1214c4a#egg=gnupg
