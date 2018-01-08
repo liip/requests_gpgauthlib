@@ -6,7 +6,7 @@ gnupg_hash = 'bb2eb8134660930f2c6a1528a334fdd5e1214c4a'
 gnupg_vers = '2.3.1-10-gbb2eb81'
 
 setup(name='python-gpgauth-cli',
-      version='0.2018010400',
+      version='0.0.1',
       description='gpgauth-cli - A GPGAuth Client library',
       author='Didier \'OdyX\' Raboud',
       author_email='odyx@liip.ch',
@@ -16,10 +16,7 @@ setup(name='python-gpgauth-cli',
           'requests'
       ],
       dependency_links=[
-          (
-              'git+https://github.com/OdyX/python-gnupg.git@%s#egg=gnupg'
-              % gnupg_hash
-          ),
+          'git+https://github.com/OdyX/python-gnupg.git@%s#egg=gnupg' % gnupg_hash,
       ],
       tests_require=['pytest'],
       )
