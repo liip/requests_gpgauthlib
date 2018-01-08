@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 
-from gpgauth import GPGAuth
+import requests
+
+from requests_gpgauthlib.gpgauth_session import GPGAuthSession
+
+SERVER_URL = 'https://demo.passbolt.com/'
 
 # Instantiate the GPGAuth object
-ga = GPGAuth(
-    server_url='https://dermo.passbolt.com',
+ga = GPGAuthSession(
+    auth_url=SERVER_URL + '/auth/',
     server_fingerprint='6810A8F7728F4A7CE936F93BA27743FA0C9E83E0',
-    user_private_key_file='/tmp/passbolt_private.asc')
+)
 
-# You can run through each step individually:
-ga.stage0()  # or ga.verify_server_identity()
-ga.stage1()  # or ga.login()
-ga.stage2()  # or ga.authenticate_with_token
-
-# Then some objects are available for you:
-# ga.gpg has your GnuPG key in an instance-specific GPG homedir
-# ga.requests is a python-requests object that has the session cookie.
-#   In other words, it's authenticated!
-
-# Bonus: if you access ga.requests directly, it will login at first use!
-# On a passbolt server, try:
-
-resources_req = ga.requests.get(ga.server_url + '/resources.json')
+# Any non-authenticated request will be authenticated first
+resources_req = ga.get(SERVER_URL + '/resources.json')
 all_resources = resources_req.json()['body']
 first_resource = all_resources[0]
 
