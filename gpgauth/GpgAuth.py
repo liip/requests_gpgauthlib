@@ -55,8 +55,7 @@ class GPGAuth:
 
         # Eventual Basic Authentication
         if http_username and http_password:
-            self._requests.auth = \
-                    requests.auth.HTTPBasicAuth(http_username, http_password)
+            self._requests.auth = requests.auth.HTTPBasicAuth(http_username, http_password)
 
         self._requests_cookie_filename = os.path.join(self.workdir, 'requests_cookies')
         self._requests.cookies = MozillaCookieJar(self._requests_cookie_filename)
@@ -64,7 +63,6 @@ class GPGAuth:
             self._requests.cookies.load()
         except FileNotFoundError:
             pass
-
 
     @property
     def workdir(self):
@@ -91,22 +89,19 @@ class GPGAuth:
         try:
             self._user_fingerprint
         except AttributeError:
-          # Import the user private key
-          with open(self._user_private_key_file, 'r') as key:
-              logger.info(
-                      'Importing the user private key; password prompt expected'
-                      )
-              import_result = self.gpg_raw.import_keys(key.read())
-              if len(import_result.fingerprints) < 1:
-                  raise GPGAuthException('No key could be imported')
-              else:
-                  [
-                      logger.info('GPG key 0x%s successfully imported' % key)
-                      for key in import_result.fingerprints
-                  ]
-                  self._user_fingerprint = import_result.fingerprints.pop()
+            # Import the user private key
+            with open(self._user_private_key_file, 'r') as key:
+                logger.info('Importing the user private key; password prompt expected')
+                import_result = self.gpg_raw.import_keys(key.read())
+                if len(import_result.fingerprints) < 1:
+                    raise GPGAuthException('No key could be imported')
+                else:
+                    [
+                        logger.info('GPG key 0x%s successfully imported' % key)
+                        for key in import_result.fingerprints
+                    ]
+                    self._user_fingerprint = import_result.fingerprints.pop()
         return self._user_fingerprint
-
 
     @property
     def gpg(self):
@@ -136,7 +131,7 @@ class GPGAuth:
         """ Return a python-requests Object       """
         """ with an authenticated GPGAuth context """
         if not self.is_authenticated():
-          self.authenticate_with_token()
+            self.authenticate_with_token()
         return self._requests
 
     @property
