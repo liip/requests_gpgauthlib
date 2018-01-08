@@ -22,6 +22,7 @@ import re
 from gnupg import GPG
 from requests import Session
 from tempfile import TemporaryDirectory
+from urllib.parse import unquote_plus
 from uuid import uuid4
 
 from .exceptions import GPGAuthException, GPGAuthStage0Exception
@@ -33,6 +34,7 @@ class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
     VERIFY_URI = '/verify.json'
+    LOGIN_URI = '/login.json'
 
     # This is passbolt_api's version
     GPGAUTH_SUPPORTED_VERSION = '1.3.0'
@@ -249,5 +251,61 @@ class GPGAuthSession(Session):
         self._server_identity_verified = True
         logger.info('server_identity_verified(): OK')
 
+    def logged_in(self):
+        """ GPGAuth Stage1 """
+        """ Get and decrypt a verification given by the server """
+        try:
+            self._user_auth_token
+            return
+        except AttributeError:
+            pass
+
+        # Prerequisite
+        self.server_identity_verified()
+
+        r = self.post(
+            self.auth_url + self.LOGIN_URI,
+            json={'gpg_auth': {'keyid': self.user_fingerprint}}
+        )
+
+        validation_errors = []
+        if r.headers['X-GPGAuth-Authenticated'] != 'false':
+            validation_errors.append(
+                GPGAuthStage1Exception(
+                    'X-GPGAuth-Authenticated should be set to false'))
+        if r.headers['X-GPGAuth-Progress'] != 'stage1':
+            validation_errors.append(
+                GPGAuthStage1Exception(
+                    'X-GPGAuth-Progress should be set to stage1'))
+        if 'X-GPGAuth-User-Auth-Token' not in r.headers:
+            validation_errors.append(
+                GPGAuthStage1Exception(
+                    'X-GPGAuth-User-Auth-Token should be set'))
+        if 'X-GPGAuth-Verify-Response' in r.headers:
+            validation_errors.append(
+                GPGAuthStage1Exception(
+                    'X-GPGAuth-Verify-Response should not be set'))
+        if 'X-GPGAuth-Refer' in r.headers:
+            validation_errors.append(
+                GPGAuthStage1Exception(
+                    'X-GPGAuth-Refer should not be set'))
+
+        if validation_errors:
+            logger.warning(r.headers)
+            raise validation_errors.pop()
+
+        # Get the encrypted User Auth Token
+        encrypted_user_auth_token = unquote_plus(
+            r.headers['X-GPGAuth-User-Auth-Token']
+            .replace('\\\\', '\\')
+        ).replace('\\ ', ' ')
+        logger.info('Decrypting the user authentication token; '
+                    'password prompt expected')
+        self._user_auth_token = str(
+            self.gpg.decrypt(encrypted_user_auth_token, always_trust=True)
+        )
+        logger.info('logged_in(): OK')
+
     # GPGAuth stages in numerical form
     stage0 = server_identity_verified
+    stage1 = logged_in
