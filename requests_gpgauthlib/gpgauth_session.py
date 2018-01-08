@@ -23,6 +23,11 @@ from gnupg import GPG
 from requests import Session
 from tempfile import TemporaryDirectory
 
+from .exceptions import GPGAuthException
+
+# This is passbolt_api's version
+GPGAUTH_SUPPORTED_VERSION = '1.3.0'
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,3 +79,25 @@ class GPGAuthSession(Session):
         # Instantiate the GnuPG process
         self._gpg = GPG(homedir=_gpghomedirname)
         return self._gpg
+
+    @property
+    def gpgauth_version_is_supported(self):
+        if hasattr(self, '_gpgauth_version_is_supported'):
+            return self._gpgauth_version_is_supported is True
+
+        r = self.head(self.auth_url)
+        if 'X-GPGAuth-Version' not in r.headers:
+            logger.debug(r.headers)
+            raise GPGAuthException(
+                "GPGAuth support not announced by %s" % self.auth_url
+            )
+        if r.headers['X-GPGAuth-Version'] != GPGAUTH_SUPPORTED_VERSION:
+            raise GPGAuthException(
+                "GPGAuth Version not supported (%s != %s)" % (
+                    r.headers['X-GPGAuth-Version'],
+                    GPGAUTH_SUPPORTED_VERSION
+                 )
+            )
+        self._gpgauth_version_is_supported = True
+        logger.info('gpgauth_version_is_supported(): OK')
+        return True
