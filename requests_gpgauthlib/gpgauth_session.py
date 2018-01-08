@@ -20,6 +20,7 @@ import os
 import re
 
 from gnupg import GPG
+from http.cookiejar import MozillaCookieJar
 from requests import Session
 from tempfile import TemporaryDirectory
 from urllib.parse import unquote_plus
@@ -51,6 +52,13 @@ class GPGAuthSession(Session):
         self._server_fingerprint = server_fingerprint
         self._amnesic_gpg = amnesic_gpg
         super(GPGAuthSession, self).__init__(**kwargs)
+
+        self._cookie_filename = os.path.join(self.workdir, 'gpgauth_session_cookies')
+        self.cookies = MozillaCookieJar(self._cookie_filename)
+        try:
+            self.cookies.load()
+        except FileNotFoundError:
+            pass
 
     @property
     def _nonce0(self):
@@ -350,6 +358,7 @@ class GPGAuthSession(Session):
         if validation_errors:
             logger.warning(r.headers)
             raise validation_errors.pop()
+        self.cookies.save()
         logger.info('authenticated_with_token(): OK')
 
     def is_authenticated(self):
@@ -360,6 +369,11 @@ class GPGAuthSession(Session):
         if self.is_authenticated():
             return True
         self.authenticated_with_token()
+        return True
+
+    def __call__(self, request):
+        self.authenticate()
+        return request
 
     # GPGAuth stages in numerical form
     stage0 = server_identity_verified
