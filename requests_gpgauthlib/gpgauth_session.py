@@ -25,7 +25,7 @@ from tempfile import TemporaryDirectory
 from urllib.parse import unquote_plus
 from uuid import uuid4
 
-from .exceptions import GPGAuthException, GPGAuthStage0Exception
+from .exceptions import GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception, GPGAuthStage2Exception
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class GPGAuthSession(Session):
     """
     VERIFY_URI = '/verify.json'
     LOGIN_URI = '/login.json'
+    CHECKSESSION_URI = '/checkSession.json'
 
     # This is passbolt_api's version
     GPGAUTH_SUPPORTED_VERSION = '1.3.0'
@@ -176,6 +177,14 @@ class GPGAuthSession(Session):
         self._user_fingerprint = secret_keys.fingerprints[0]
         return self._user_fingerprint
 
+    @property
+    def user_auth_token(self):
+        try:
+            self._user_auth_token
+        except AttributeError:
+            self.logged_in()
+        return self._user_auth_token
+
     def import_user_private_key_from_file(self, user_private_key_file):
         # Import the user private key
         with open(user_private_key_file, 'r') as key:
@@ -306,6 +315,53 @@ class GPGAuthSession(Session):
         )
         logger.info('logged_in(): OK')
 
+    def authenticated_with_token(self):
+        """ GPGAuth Stage 2 """
+        """ Send back the token to the server to get auth cookie """
+
+        r = self.post(self.auth_url + self.LOGIN_URI,
+                      json={'gpg_auth': {
+                          'keyid': self.user_fingerprint,
+                          'user_token_result': self.user_auth_token,
+                          }}
+                      )
+        validation_errors = []
+        if r.headers['X-GPGAuth-Authenticated'] != 'true':
+            validation_errors.append(
+                GPGAuthStage2Exception(
+                    'X-GPGAuth-Authenticated should be set to true'))
+        if r.headers['X-GPGAuth-Progress'] != 'complete':
+            validation_errors.append(
+                GPGAuthStage2Exception(
+                    'X-GPGAuth-Progress should be set to complete'))
+        if 'X-GPGAuth-User-Auth-Token' in r.headers:
+            validation_errors.append(
+                GPGAuthStage2Exception(
+                    'X-GPGAuth-User-Auth-Token should not be set'))
+        if 'X-GPGAuth-Verify-Response' in r.headers:
+            validation_errors.append(
+                GPGAuthStage2Exception(
+                    'X-GPGAuth-Verify-Response should not be set'))
+        if 'X-GPGAuth-Refer' not in r.headers:
+            validation_errors.append(
+                GPGAuthStage2Exception(
+                    'X-GPGAuth-Refer should be set'))
+
+        if validation_errors:
+            logger.warning(r.headers)
+            raise validation_errors.pop()
+        logger.info('authenticated_with_token(): OK')
+
+    def is_authenticated(self):
+        r = self.get(self.auth_url + self.CHECKSESSION_URI)
+        return r.status_code != 403
+
+    def authenticate(self):
+        if self.is_authenticated():
+            return True
+        self.authenticated_with_token()
+
     # GPGAuth stages in numerical form
     stage0 = server_identity_verified
     stage1 = logged_in
+    stage2 = authenticated_with_token
