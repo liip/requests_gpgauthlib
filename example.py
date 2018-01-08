@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import requests
-
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
 
 SERVER_URL = 'https://demo.passbolt.com/'
