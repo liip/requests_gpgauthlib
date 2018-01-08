@@ -29,15 +29,36 @@ logger = logging.getLogger(__name__)
 class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
-    def __init__(self, auth_url, server_fingerprint, **kwargs):
+    def __init__(self, auth_url, server_fingerprint, amnesic_gpg=False, **kwargs):
         """Construct a new GPGAuth client session.
         :param auth_url: URL to the GPGAuth endpoint (…/auth/)
         :param server_fingerprint: Full PGP fingerprint of the server
+        :param amnesic_gpg: Boolean; Use a temporary GnuPG Home directory for every run
         :param kwargs: Arguments to pass to the Session constructor.
         """
         self.auth_url = re.sub(r'/$', '', auth_url)  # Drop the trailing slash
         self._server_fingerprint = server_fingerprint
+        self._amnesic_gpg = amnesic_gpg
         super(GPGAuthSession, self).__init__(**kwargs)
+
+    @property
+    def workdir(self):
+        if hasattr(self, '_workdir'):
+            return self._workdir
+        # Setup our home
+        _userhome = os.environ.get('HOME')
+        if not _userhome:
+            _userhome = '/tmp/requests_gpgauthlib'
+            try:
+                os.makedirs(_userhome)
+            except (OSError, IOError):
+                _userhome = os.getcwd()
+        self._workdir = os.path.join(os.path.join(_userhome, '.config'), 'requests_gpgauthlib')
+        try:
+            os.makedirs(self._workdir, exist_ok=True)
+        except (OSError, IOError):
+            pass
+        return self._workdir
 
     @property
     def gpg(self):
@@ -45,10 +66,10 @@ class GPGAuthSession(Session):
             return self._gpg
 
         # Instantiate GnuPG in a specific directory
-        _gpghomedirname = os.path.join(self.workdir, 'gnupg-homedir')
-        if not self._permanent_gnupghomedir:
+        _gpghomedirname = os.path.join(self.workdir, '.gnupg')
+        if self._amnesic_gpg:
             # Instantiate this as a class attribute to let it be destroyed automagically
-            self._temporarygpghomedir = TemporaryDirectory(prefix='python-gpgauth-cli-')
+            self._temporarygpghomedir = TemporaryDirectory(prefix='requests_gpgauthlib-')
             _gpghomedirname = self._temporarygpghomedir.name
         # Instantiate the GnuPG process
         self._gpg = GPG(homedir=_gpghomedirname)
