@@ -1,1 +1,1 @@
-from .gpgauth_session import GPGAuthSession
+from .gpgauth_session import GPGAuthSession  # noqa
