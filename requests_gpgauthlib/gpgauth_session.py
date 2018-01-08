@@ -367,9 +367,8 @@ class GPGAuthSession(Session):
 
     def authenticate(self):
         if self.is_authenticated():
-            return True
+            return
         self.authenticated_with_token()
-        return True
 
     def __call__(self, request):
         self.authenticate()
