@@ -1,0 +1,7 @@
+*.pyc
+*egg-info*
+dist/
+# Some dot-directories
+.cache
+.eggs
+.tox
