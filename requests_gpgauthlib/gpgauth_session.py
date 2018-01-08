@@ -130,7 +130,7 @@ class GPGAuthSession(Session):
             raise GPGAuthException(
                 "GPGAuth Version not supported (%s != %s)" % (
                     r.headers['X-GPGAuth-Version'],
-                    GPGAUTH_SUPPORTED_VERSION
+                    self.GPGAUTH_SUPPORTED_VERSION
                  )
             )
         self._gpgauth_version_is_supported = True
@@ -180,7 +180,8 @@ class GPGAuthSession(Session):
         # Try to get them from GPG
         secret_keys = self.gpg.list_keys(secret=True)
         if not secret_keys:
-            raise GPGAuthException('No user fingerprint was loaded, you need to call import_user_private_key_from_file()')
+            raise GPGAuthException('No user fingerprint was loaded!'
+                                   'You need to call import_user_private_key_from_file() first!')
         # Assume the main key is the first
         self._user_fingerprint = secret_keys.fingerprints[0]
         return self._user_fingerprint
