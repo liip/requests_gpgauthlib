@@ -9,6 +9,8 @@ ga = GPGAuthSession(
     auth_url=SERVER_URL + '/auth/',
     server_fingerprint='6810A8F7728F4A7CE936F93BA27743FA0C9E83E0',
 )
+# That's always needed first
+ga.authenticate()
 
 # Any non-authenticated request will be authenticated first
 resources_req = ga.get(SERVER_URL + '/resources.json')

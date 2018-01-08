@@ -364,16 +364,12 @@ class GPGAuthSession(Session):
 
     def is_authenticated(self):
         r = self.get(self.auth_url + self.CHECKSESSION_URI)
-        return r.status_code != 403
+        return r.status_code not in [401, 403]
 
     def authenticate(self):
         if self.is_authenticated():
             return
         self.authenticated_with_token()
-
-    def __call__(self, request):
-        self.authenticate()
-        return request
 
     # GPGAuth stages in numerical form
     stage0 = server_identity_verified
