@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
+    VERIFY_URI = '/verify.json'
+
     def __init__(self, auth_url, server_fingerprint, amnesic_gpg=False, **kwargs):
         """Construct a new GPGAuth client session.
         :param auth_url: URL to the GPGAuth endpoint (…/auth/)
@@ -101,3 +103,37 @@ class GPGAuthSession(Session):
         self._gpgauth_version_is_supported = True
         logger.info('gpgauth_version_is_supported(): OK')
         return True
+
+    @property
+    def server_key(self):
+        if hasattr(self, '_server_key'):
+            return self._server_key
+
+        if not self.gpgauth_version_is_supported:
+            return False
+
+        # Try to get them from GPG
+        server_key = self.gpg.export_keys([self._server_fingerprint], secret=False, subkeys=False)
+        if 'BEGIN PGP PUBLIC KEY BLOCK' in server_key:
+            self._server_key = server_key
+            return self._server_key
+
+        # Try to get it from the server
+        r = self.get(self.auth_url + self.VERIFY_URI)
+        if r.json()['body']['fingerprint'] != self._server_fingerprint:
+            raise GPGAuthException(
+                "Hoped server fingerprint %s doesn't match the server's %s" %
+                (self._server_fingerprint, r.json()['body']['fingerprint'])
+            )
+        _server_key = r.json()['body']['keydata']
+        import_result = self.gpg.import_keys(_server_key)
+        if self._server_fingerprint not in import_result.fingerprints:
+            raise GPGAuthException(
+                "Hoped server fingerprint %s doesn't match the server key." %
+                self._server_fingerprint
+            )
+        logger.info('server_fingerprint(): 0x%s '
+                    'imported successfully' % self._server_fingerprint)
+        self._server_key = _server_key
+
+        return self._server_key
