@@ -120,11 +120,11 @@ class GPGAuthSession(Session):
             pass
 
         # We don't know, let's verify
-        r = self.head(self.auth_url)
+        r = self.get(self.auth_url + self.VERIFY_URI)
         if 'X-GPGAuth-Version' not in r.headers:
             logger.debug(r.headers)
             raise GPGAuthException(
-                "GPGAuth support not announced by %s" % self.auth_url
+                "GPGAuth support not announced by %s" % self.auth_url + self.VERIFY_URI
             )
         if r.headers['X-GPGAuth-Version'] != self.GPGAUTH_SUPPORTED_VERSION:
             raise GPGAuthException(
