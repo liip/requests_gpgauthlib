@@ -259,8 +259,11 @@ class GPGAuthSession(Session):
                     'X-GPGAuth-Refer should not be set'))
 
         if validation_errors:
-            logger.warning(r.headers)
-            raise validation_errors.pop()
+            logger.debug(r.headers)
+            if 'X-GPGAuth-Debug' in r.headers:
+                raise GPGAuthStage0Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
+            else:
+                raise validation_errors.pop()
 
         if r.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
             raise GPGAuthStage0Exception(
@@ -310,8 +313,11 @@ class GPGAuthSession(Session):
                     'X-GPGAuth-Refer should not be set'))
 
         if validation_errors:
-            logger.warning(r.headers)
-            raise validation_errors.pop()
+            logger.debug(r.headers)
+            if 'X-GPGAuth-Debug' in r.headers:
+                raise GPGAuthStage1Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
+            else:
+                raise validation_errors.pop()
 
         # Get the encrypted User Auth Token
         encrypted_user_auth_token = unquote_plus(
@@ -358,8 +364,11 @@ class GPGAuthSession(Session):
                     'X-GPGAuth-Refer should be set'))
 
         if validation_errors:
-            logger.warning(r.headers)
-            raise validation_errors.pop()
+            logger.debug(r.headers)
+            if 'X-GPGAuth-Debug' in r.headers:
+                raise GPGAuthStage2Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
+            else:
+                raise validation_errors.pop()
         self.cookies.save()
         logger.info('authenticated_with_token(): OK')
 
