@@ -189,9 +189,10 @@ class GPGAuthSession(Session):
     @property
     def user_auth_token(self):
         try:
-            self._user_auth_token
+            return self._user_auth_token
         except AttributeError:
-            self.logged_in()
+            pass
+        self.logged_in()
         return self._user_auth_token
 
     def import_user_private_key_from_file(self, user_private_key_file):
