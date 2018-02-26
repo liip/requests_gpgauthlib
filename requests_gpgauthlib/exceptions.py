@@ -23,16 +23,24 @@ class GPGAuthException(Exception):
     pass
 
 
-class GPGAuthStage0Exception(Exception):
+class GPGAuthStage0Exception(GPGAuthException):
     """ GPGAuth stage0 (server verification) Exception """
     pass
 
 
-class GPGAuthStage1Exception(Exception):
+class GPGAuthStage1Exception(GPGAuthException):
     """ Base GPGAuth stage1 (login) Exception """
     pass
 
 
-class GPGAuthStage2Exception(Exception):
+class GPGAuthStage2Exception(GPGAuthException):
     """ Base GPGAuth stage2 (Authentication) Exception """
+    pass
+
+
+class GPGAuthNoSecretKeyError(GPGAuthException):
+    pass
+
+
+class GPGAuthKeyImportError(GPGAuthException):
     pass

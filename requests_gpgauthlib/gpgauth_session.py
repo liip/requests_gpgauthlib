@@ -18,15 +18,15 @@
 import logging
 import os
 import re
-
-from gnupg import GPG
 from http.cookiejar import MozillaCookieJar
-from requests import Session
-from tempfile import TemporaryDirectory
 from urllib.parse import unquote_plus
 from uuid import uuid4
 
-from .exceptions import GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception, GPGAuthStage2Exception
+from requests import Session
+
+from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
+                         GPGAuthStage2Exception)
+from .utils import get_workdir
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +41,20 @@ class GPGAuthSession(Session):
     # This is passbolt_api's version
     GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
-    def __init__(self, auth_url, server_fingerprint, amnesic_gpg=False, **kwargs):
+    def __init__(self, gpg, auth_url, server_fingerprint, **kwargs):
         """Construct a new GPGAuth client session.
         :param auth_url: URL to the GPGAuth endpoint (…/auth/)
         :param server_fingerprint: Full PGP fingerprint of the server
         :param amnesic_gpg: Boolean; Use a temporary GnuPG Home directory for every run
         :param kwargs: Arguments to pass to the Session constructor.
         """
-        self.auth_url = re.sub(r'/$', '', auth_url)  # Drop the trailing slash
-        self._server_fingerprint = server_fingerprint
-        self._amnesic_gpg = amnesic_gpg
         super(GPGAuthSession, self).__init__(**kwargs)
 
-        self._cookie_filename = os.path.join(self.workdir, 'gpgauth_session_cookies')
+        self.auth_url = re.sub(r'/$', '', auth_url)  # Drop the trailing slash
+        self.gpg = gpg
+        self._server_fingerprint = server_fingerprint
+
+        self._cookie_filename = os.path.join(get_workdir(), 'gpgauth_session_cookies')
         self.cookies = MozillaCookieJar(self._cookie_filename)
         try:
             self.cookies.load()
@@ -72,45 +73,6 @@ class GPGAuthSession(Session):
         self.__nonce0 += str(uuid4())
         self.__nonce0 += '|gpgauthv%s' % self.GPGAUTH_SUPPORTED_VERSION
         return self.__nonce0
-
-    @property
-    def workdir(self):
-        try:
-            return self._workdir
-        except AttributeError:
-            pass
-
-        # Setup our home
-        _userhome = os.environ.get('HOME')
-        if not _userhome:
-            _userhome = '/tmp/requests_gpgauthlib'
-            try:
-                os.makedirs(_userhome)
-            except (OSError, IOError):
-                _userhome = os.getcwd()
-        self._workdir = os.path.join(os.path.join(_userhome, '.config'), 'requests_gpgauthlib')
-        try:
-            os.makedirs(self._workdir, exist_ok=True)
-        except (OSError, IOError):
-            pass
-        return self._workdir
-
-    @property
-    def gpg(self):
-        try:
-            return self._gpg
-        except AttributeError:
-            pass
-
-        # Instantiate GnuPG in a specific directory
-        _gpghomedirname = os.path.join(self.workdir, '.gnupg')
-        if self._amnesic_gpg:
-            # Instantiate this as a class attribute to let it be destroyed automagically
-            self._temporarygpghomedir = TemporaryDirectory(prefix='requests_gpgauthlib-')
-            _gpghomedirname = self._temporarygpghomedir.name
-        # Instantiate the GnuPG process
-        self._gpg = GPG(homedir=_gpghomedirname)
-        return self._gpg
 
     @property
     def gpgauth_version_is_supported(self):
@@ -146,7 +108,7 @@ class GPGAuthSession(Session):
             return False
 
         # Try to get them from GPG
-        server_key = self.gpg.export_keys([self._server_fingerprint], secret=False, subkeys=False)
+        server_key = self.gpg.export_keys([self._server_fingerprint], secret=False)
         if 'BEGIN PGP PUBLIC KEY BLOCK' in server_key:
             self._server_key = server_key
             return self._server_fingerprint
@@ -180,8 +142,9 @@ class GPGAuthSession(Session):
         # Try to get them from GPG
         secret_keys = self.gpg.list_keys(secret=True)
         if not secret_keys:
-            raise GPGAuthException('No user fingerprint was loaded!'
-                                   'You need to call import_user_private_key_from_file() first!')
+            raise GPGAuthNoSecretKeyError(
+                'No user fingerprint was loaded! You need to call import_user_private_key_from_file() first!'
+            )
         # Assume the main key is the first
         self._user_fingerprint = secret_keys.fingerprints[0]
         return self._user_fingerprint
@@ -195,21 +158,6 @@ class GPGAuthSession(Session):
         self.logged_in()
         return self._user_auth_token
 
-    def import_user_private_key_from_file(self, user_private_key_file):
-        # Import the user private key
-        with open(user_private_key_file, 'r') as key:
-            logger.info('Importing the user private key; password prompt expected')
-            import_result = self.gpg.import_keys(key.read())
-            if len(import_result.fingerprints) < 1:
-                raise GPGAuthException('No key could be imported')
-            else:
-                [
-                    logger.info('GPG key 0x%s successfully imported' % key)
-                    for key in import_result.fingerprints
-                ]
-                self._user_fingerprint = import_result.fingerprints.pop()
-        return self._user_fingerprint
-
     def server_identity_verified(self):
         """ GPGAuth stage0 """
         try:
@@ -219,7 +167,7 @@ class GPGAuthSession(Session):
 
         # Encrypt a uuid token for the server
         server_verify_token = self.gpg.encrypt(self._nonce0,
-                                               self.server_fingerprint)
+                                               self.server_fingerprint, always_trust=True)
         if not server_verify_token.ok:
             raise GPGAuthStage0Exception(
                 'Encryption of the nonce0 (%s) '
