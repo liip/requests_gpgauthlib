@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='requests_gpgauthlib',
-      version='0.0.2+',
+      version='0.0.3',
       description='requests_gpgauthlib - A requests GPGAuth authentication library',
       author='Didier \'OdyX\' Raboud',
       author_email='odyx@liip.ch',
