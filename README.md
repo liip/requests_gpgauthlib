@@ -21,10 +21,11 @@ import_user_private_key_from_file(gpg, '~/Downloads/passbolt_private.asc')
 
 ga = GPGAuthSession(
   gpg=gpg,
-  auth_url=SERVER_URL + '/auth/',
+  server_url=SERVER_URL,
+  auth_uri='/auth/',
   server_fingerprint=SERVER_FINGERPRINT,
 )
 ga.authenticate()
-all_resources = ga.get(SERVER_URL + '/resources.json', params={'contain[secret]': 1}).json()['body']
+all_resources = ga.get(ga.get_absolute_uri('/resources.json'), params={'contain[secret]': 1}).json()['body']
 print(all_resources)
 ```

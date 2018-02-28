@@ -17,7 +17,6 @@
 
 import logging
 import os
-import re
 from http.cookiejar import MozillaCookieJar
 from urllib.parse import unquote_plus
 from uuid import uuid4
@@ -41,16 +40,19 @@ class GPGAuthSession(Session):
     # This is passbolt_api's version
     GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
-    def __init__(self, gpg, auth_url, server_fingerprint, **kwargs):
+    def __init__(self, gpg, server_url, auth_uri, server_fingerprint, **kwargs):
         """Construct a new GPGAuth client session.
-        :param auth_url: URL to the GPGAuth endpoint (…/auth/)
+        :param gpg: GPG object to handle crypto stuff
+        :param server_url: URL to the server, eg. https://gpg.example.com/
+        :param auth_uri: URI to the GPGAuth endpoint (…/auth/), used as a prefix for all auth URIs
         :param server_fingerprint: Full PGP fingerprint of the server
-        :param amnesic_gpg: Boolean; Use a temporary GnuPG Home directory for every run
+        :param server_url: Full PGP fingerprint of the server
         :param kwargs: Arguments to pass to the Session constructor.
         """
         super(GPGAuthSession, self).__init__(**kwargs)
 
-        self.auth_url = re.sub(r'/$', '', auth_url)  # Drop the trailing slash
+        self.server_url = server_url.rstrip('/')
+        self.auth_uri = auth_uri.rstrip('/')
         self.gpg = gpg
         self._server_fingerprint = server_fingerprint
 
@@ -60,6 +62,19 @@ class GPGAuthSession(Session):
             self.cookies.load()
         except FileNotFoundError:
             pass
+
+    def build_absolute_uri(self, uri):
+        """
+        Return the given URI in an absolute form with the server name, eg. https://secure.example.com/uri/.
+        """
+        return self.server_url + uri
+
+    def build_absolute_auth_uri(self, uri):
+        """
+        Return the given URI in an absolute form with the server name and the auth URI prefix, eg.
+        https://secure.example.com/auth/uri/.
+        """
+        return self.build_absolute_uri(self.auth_uri + uri)
 
     @property
     def _nonce0(self):
@@ -82,11 +97,11 @@ class GPGAuthSession(Session):
             pass
 
         # We don't know, let's verify
-        r = self.get(self.auth_url + self.VERIFY_URI)
+        r = self.get(self.build_absolute_auth_uri(self.VERIFY_URI))
         if 'X-GPGAuth-Version' not in r.headers:
             logger.debug(r.headers)
             raise GPGAuthException(
-                "GPGAuth support not announced by %s" % self.auth_url + self.VERIFY_URI
+                "GPGAuth support not announced by %s" % self.auth_uri + self.VERIFY_URI
             )
         if r.headers['X-GPGAuth-Version'] != self.GPGAUTH_SUPPORTED_VERSION:
             raise GPGAuthException(
@@ -114,7 +129,7 @@ class GPGAuthSession(Session):
             return self._server_fingerprint
 
         # Try to get it from the server
-        r = self.get(self.auth_url + self.VERIFY_URI)
+        r = self.get(self.build_absolute_auth_uri(self.VERIFY_URI))
         if r.json()['body']['fingerprint'] != self._server_fingerprint:
             raise GPGAuthException(
                 "Hoped server fingerprint %s doesn't match the server's %s" %
@@ -176,7 +191,7 @@ class GPGAuthSession(Session):
             )
 
         r = self.post(
-            self.auth_url + self.VERIFY_URI,
+            self.build_absolute_auth_uri(self.VERIFY_URI),
             json={'gpg_auth': {
                 'keyid': self.user_fingerprint,
                 'server_verify_token': str(server_verify_token)
@@ -234,7 +249,7 @@ class GPGAuthSession(Session):
         self.server_identity_verified()
 
         r = self.post(
-            self.auth_url + self.LOGIN_URI,
+            self.build_absolute_auth_uri(self.LOGIN_URI),
             json={'gpg_auth': {'keyid': self.user_fingerprint}}
         )
 
@@ -283,7 +298,7 @@ class GPGAuthSession(Session):
         """ GPGAuth Stage 2 """
         """ Send back the token to the server to get auth cookie """
 
-        r = self.post(self.auth_url + self.LOGIN_URI,
+        r = self.post(self.build_absolute_auth_uri(self.LOGIN_URI),
                       json={'gpg_auth': {
                           'keyid': self.user_fingerprint,
                           'user_token_result': self.user_auth_token,
@@ -321,7 +336,7 @@ class GPGAuthSession(Session):
         logger.info('authenticated_with_token(): OK')
 
     def is_authenticated(self):
-        r = self.get(self.auth_url + self.CHECKSESSION_URI)
+        r = self.get(self.build_absolute_auth_uri(self.CHECKSESSION_URI))
         return r.status_code not in [401, 403]
 
     def authenticate(self):

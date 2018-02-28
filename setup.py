@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(name='requests_gpgauthlib',
       version='0.0.3',
@@ -13,4 +13,5 @@ setup(name='requests_gpgauthlib',
           'requests'
       ],
       tests_require=['pytest'],
+      packages=find_packages()
       )
