@@ -34,7 +34,9 @@ def get_temporary_workdir():
 
 
 def create_gpg(workdir):
-    return GPG(gnupghome=os.path.join(workdir, '.gnupg'))
+    gpg = GPG(gnupghome=os.path.join(workdir, '.gnupg'))
+    gpg.encoding = 'utf-8'
+    return gpg
 
 
 def import_user_private_key_from_file(gpg, user_private_key_file):
