@@ -18,13 +18,30 @@
 import pytest
 import os
 
+from mock import call, patch
+
 from test.support import EnvironmentVarGuard
 
 from requests_gpgauthlib.utils import get_workdir
 
 
-def test_get_workdir_gives_homedir_if_HOME_is_in_env():
+@patch('os.makedirs')
+def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs):
     env = EnvironmentVarGuard()
     test_home = '/requests-gpgauth-home'
     env.set('HOME', test_home)
-    assert get_workdir() == os.path.join(test_home, '.config', 'requests_gpgauthlib')
+    workdir = os.path.join(test_home, '.config', 'requests_gpgauthlib')
+    assert get_workdir() == workdir
+    makedirs.assert_called_with(workdir, exist_ok=True)
+
+
+@patch('os.makedirs')
+def test_get_workdir_gives_tmp_if_HOME_is_not_in_env(makedirs):
+    env = EnvironmentVarGuard()
+    env.unset('HOME')
+    workdir = os.path.join('/tmp/requests_gpgauthlib', '.config', 'requests_gpgauthlib')
+    assert get_workdir() == workdir
+    makedirs.assert_has_calls([
+        call('/tmp/requests_gpgauthlib'),
+        call(workdir, exist_ok=True),
+    ])

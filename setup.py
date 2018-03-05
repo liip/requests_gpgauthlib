@@ -12,6 +12,9 @@ setup(name='requests_gpgauthlib',
           'python-gnupg',
           'requests'
       ],
-      tests_require=['pytest'],
+      tests_require=[
+          'pytest',
+          'mock'
+      ],
       packages=find_packages()
       )
