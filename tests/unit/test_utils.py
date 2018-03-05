@@ -16,13 +16,16 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 
 import logging
+import pytest
 import os
 
+from gnupg import GPG
 from mock import call, patch
-
+from tempfile import NamedTemporaryFile
 from test.support import EnvironmentVarGuard
 
-from requests_gpgauthlib.utils import get_temporary_workdir, get_workdir
+from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir, get_workdir, import_user_private_key_from_file
+from requests_gpgauthlib.exceptions import GPGAuthKeyImportError
 
 
 @patch('os.makedirs')
@@ -77,8 +80,71 @@ def test_get_workdir_gives_cwd_if_HOME_is_not_in_env_and_tmp_unwriteable(makedir
 
 
 def test_get_temporary_workdir_is_prefixed():
-    assert 'requests_gpgauthlib-' in str(get_temporary_workdir())
+    assert 'requests_gpgauthlib-' in get_temporary_workdir().name
 
 
 def test_get_temporary_workdir_is_different():
-    assert get_temporary_workdir() != get_temporary_workdir()
+    assert get_temporary_workdir().name != get_temporary_workdir().name
+
+
+def test_create_gpg_gives_a_GPG_object():
+    assert isinstance(create_gpg(get_temporary_workdir().name), GPG)
+
+
+def test_create_gpg_has_its_home_where_we_say_we_want_it():
+    workdir = get_temporary_workdir().name
+    gpg = create_gpg(workdir)
+    assert workdir in gpg.gnupghome
+
+
+def test_import_user_private_key_from_inexistant_file_raises():
+    gpg = create_gpg(get_temporary_workdir().name)
+    with pytest.raises(FileNotFoundError):
+        import_user_private_key_from_file(gpg, '/inexistant')
+
+
+def test_import_user_private_key_from_empty_file_raises():
+    gpg = create_gpg(get_temporary_workdir().name)
+    with NamedTemporaryFile(mode='w') as empty_key_file:
+        with pytest.raises(GPGAuthKeyImportError):
+            import_user_private_key_from_file(gpg, empty_key_file.name)
+
+
+def test_import_user_private_key_from_file_works(caplog):
+    gpg_generator = create_gpg(get_temporary_workdir().name)
+
+    # Generate a key
+    passphrase = 'test-passphrase'
+    input_data = gpg_generator.gen_key_input(key_length=1024, passphrase=passphrase)
+
+    # Generate the key, making sure it worked
+    key = gpg_generator.gen_key(input_data)
+    assert key.fingerprint
+
+    # Export the key, making sure it worked
+    key_asc = gpg_generator.export_keys(
+        key.fingerprint,
+        armor=True, minimal=True,
+        secret=True, passphrase=passphrase)
+    assert key_asc
+
+    # Create a temporary file, and use it
+    with NamedTemporaryFile(mode='w') as private_key_file:
+        private_key_file.write(key_asc)
+        private_key_file.flush()
+
+        # Setup a different gpg home
+        gpg = create_gpg(get_temporary_workdir().name)
+
+        caplog.set_level(logging.INFO)
+
+        imported_fingerprint = import_user_private_key_from_file(gpg, private_key_file.name)
+        # Check that it really worked
+        assert imported_fingerprint == key.fingerprint
+        # That we logged what we wanted
+        assert caplog.record_tuples == [
+            ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected'),
+            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint),
+            # FIXME: Check why that message is output twice
+            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint)
+        ]
