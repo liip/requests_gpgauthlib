@@ -14,7 +14,7 @@ def get_workdir():
     if not _userhome:
         _userhome = '/tmp/requests_gpgauthlib'
         try:
-            os.makedirs(_userhome)
+            os.makedirs(_userhome, exist_ok=True)
         except (OSError, IOError):
             _userhome = os.getcwd()
     workdir = os.path.join(os.path.join(_userhome, '.config'), 'requests_gpgauthlib')

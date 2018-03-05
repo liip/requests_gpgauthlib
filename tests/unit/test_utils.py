@@ -41,6 +41,6 @@ def test_get_workdir_gives_tmp_if_HOME_is_not_in_env(makedirs):
     workdir = os.path.join('/tmp/requests_gpgauthlib', '.config', 'requests_gpgauthlib')
     assert get_workdir() == workdir
     makedirs.assert_has_calls([
-        call('/tmp/requests_gpgauthlib'),
+        call('/tmp/requests_gpgauthlib', exist_ok=True),
         call(workdir, exist_ok=True),
     ])
