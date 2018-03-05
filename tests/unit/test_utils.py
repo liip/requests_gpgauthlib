@@ -22,7 +22,7 @@ from mock import call, patch
 
 from test.support import EnvironmentVarGuard
 
-from requests_gpgauthlib.utils import get_workdir
+from requests_gpgauthlib.utils import get_temporary_workdir, get_workdir
 
 
 @patch('os.makedirs')
@@ -77,3 +77,11 @@ def test_get_workdir_gives_cwd_if_HOME_is_not_in_env_and_tmp_unwriteable(makedir
     assert caplog.record_tuples == [
         ('requests_gpgauthlib.utils', logging.WARNING, 'get_workdir: HOME undefined and /tmp unwriteable, using /cwd')
     ]
+
+
+def test_get_temporary_workdir_is_prefixed():
+    assert 'requests_gpgauthlib-' in str(get_temporary_workdir())
+
+
+def test_get_temporary_workdir_is_different():
+    assert get_temporary_workdir() != get_temporary_workdir()
