@@ -27,9 +27,8 @@ from requests_gpgauthlib.utils import get_temporary_workdir, get_workdir
 
 @patch('os.makedirs')
 def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs, caplog):
-    env = EnvironmentVarGuard()
     test_home = '/requests-gpgauth-home'
-    env.set('HOME', test_home)
+    EnvironmentVarGuard().set('HOME', test_home)
     workdir = os.path.join(test_home, '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
@@ -40,8 +39,7 @@ def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs, caplog):
 
 @patch('os.makedirs')
 def test_get_workdir_gives_tmp_if_HOME_is_not_in_env(makedirs, caplog):
-    env = EnvironmentVarGuard()
-    env.unset('HOME')
+    EnvironmentVarGuard().unset('HOME')
     workdir = os.path.join('/tmp/requests_gpgauthlib', '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
@@ -64,8 +62,7 @@ def makedirs_fails_in_tmp(path, exist_ok=False):
 @patch('os.getcwd', return_value='/cwd')
 @patch('os.makedirs', side_effect=makedirs_fails_in_tmp)
 def test_get_workdir_gives_cwd_if_HOME_is_not_in_env_and_tmp_unwriteable(makedirs, getcwd, caplog):
-    env = EnvironmentVarGuard()
-    env.unset('HOME')
+    EnvironmentVarGuard().unset('HOME')
     workdir = os.path.join('/cwd', '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
