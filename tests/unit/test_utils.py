@@ -77,4 +77,3 @@ def test_get_workdir_gives_cwd_if_HOME_is_not_in_env_and_tmp_unwriteable(makedir
     assert caplog.record_tuples == [
         ('requests_gpgauthlib.utils', logging.WARNING, 'get_workdir: HOME undefined and /tmp unwriteable, using /cwd')
     ]
-
