@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from requests import Session
 
+from .gpgauth_api import GPGAuthAPI
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -53,6 +54,8 @@ class GPGAuthSession(Session):
 
         self.server_url = server_url.rstrip('/')
         self.auth_uri = auth_uri.rstrip('/')
+        self.gpgauthapi = GPGAuthAPI(session=self, auth_url=self.build_absolute_uri(self.auth_uri))
+
         self.gpg = gpg
         self._server_fingerprint = server_fingerprint
 
@@ -97,7 +100,7 @@ class GPGAuthSession(Session):
             pass
 
         # We don't know, let's verify
-        r = self.get(self.build_absolute_auth_uri(self.VERIFY_URI))
+        r = self.gpgauthapi.verify()
         if 'X-GPGAuth-Version' not in r.headers:
             logger.debug(r.headers)
             raise GPGAuthException(
