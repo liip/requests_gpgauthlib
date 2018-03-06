@@ -19,6 +19,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+GPGAUTH_SUPPORTED_VERSION = "1.3.0"
 
-def get_verify(session):
-    return session.get(session.gpgauth_uri('/verify.json'))
+
+def check_verify_headers(response_headers):
+    if 'X-GPGAuth-Version' not in response_headers:
+        logger.debug(response_headers)
+        return False
+    if response_headers['X-GPGAuth-Version'] != GPGAUTH_SUPPORTED_VERSION:
+        logger.warning(
+            "GPGAuth Version not supported (%s != %s)",
+            response_headers['X-GPGAuth-Version'],
+            GPGAUTH_SUPPORTED_VERSION
+        )
+        return False
+    return True

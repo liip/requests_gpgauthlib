@@ -17,13 +17,15 @@
 
 import logging
 import os
+
 from http.cookiejar import MozillaCookieJar
 from urllib.parse import unquote_plus
 from uuid import uuid4
 
 from requests import Session
 
-from .gpgauth_api import GPGAuthAPI
+from .gpgauth_api import get_verify
+from .gpgauth_protocol import check_verify_headers
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -54,7 +56,6 @@ class GPGAuthSession(Session):
 
         self.server_url = server_url.rstrip('/')
         self.auth_uri = auth_uri.rstrip('/')
-        self.gpgauthapi = GPGAuthAPI(session=self, auth_url=self.build_absolute_uri(self.auth_uri))
 
         self.gpg = gpg
         self._server_fingerprint = server_fingerprint
@@ -72,7 +73,7 @@ class GPGAuthSession(Session):
         """
         return self.server_url + uri
 
-    def build_absolute_auth_uri(self, uri):
+    def gpgauth_uri(self, uri):
         """
         Return the given URI in an absolute form with the server name and the auth URI prefix, eg.
         https://secure.example.com/auth/uri/.
@@ -94,28 +95,7 @@ class GPGAuthSession(Session):
 
     @property
     def gpgauth_version_is_supported(self):
-        try:
-            return self._gpgauth_version_is_supported is True
-        except AttributeError:
-            pass
-
-        # We don't know, let's verify
-        r = self.gpgauthapi.verify()
-        if 'X-GPGAuth-Version' not in r.headers:
-            logger.debug(r.headers)
-            raise GPGAuthException(
-                "GPGAuth support not announced by %s" % self.auth_uri + self.VERIFY_URI
-            )
-        if r.headers['X-GPGAuth-Version'] != self.GPGAUTH_SUPPORTED_VERSION:
-            raise GPGAuthException(
-                "GPGAuth Version not supported (%s != %s)" % (
-                    r.headers['X-GPGAuth-Version'],
-                    self.GPGAUTH_SUPPORTED_VERSION
-                 )
-            )
-        self._gpgauth_version_is_supported = True
-        logger.info('gpgauth_version_is_supported(): OK')
-        return True
+        return check_verify_headers(get_verify(self).headers)
 
     @property
     def server_fingerprint(self):
@@ -132,7 +112,7 @@ class GPGAuthSession(Session):
             return self._server_fingerprint
 
         # Try to get it from the server
-        r = self.get(self.build_absolute_auth_uri(self.VERIFY_URI))
+        r = self.get(self.gpgauth_uri(self.VERIFY_URI))
         if r.json()['body']['fingerprint'] != self._server_fingerprint:
             raise GPGAuthException(
                 "Hoped server fingerprint %s doesn't match the server's %s" %
@@ -194,7 +174,7 @@ class GPGAuthSession(Session):
             )
 
         r = self.post(
-            self.build_absolute_auth_uri(self.VERIFY_URI),
+            self.gpgauth_uri(self.VERIFY_URI),
             json={'gpg_auth': {
                 'keyid': self.user_fingerprint,
                 'server_verify_token': str(server_verify_token)
@@ -252,7 +232,7 @@ class GPGAuthSession(Session):
         self.server_identity_verified()
 
         r = self.post(
-            self.build_absolute_auth_uri(self.LOGIN_URI),
+            self.gpgauth_uri(self.LOGIN_URI),
             json={'gpg_auth': {'keyid': self.user_fingerprint}}
         )
 
@@ -301,7 +281,7 @@ class GPGAuthSession(Session):
         """ GPGAuth Stage 2 """
         """ Send back the token to the server to get auth cookie """
 
-        r = self.post(self.build_absolute_auth_uri(self.LOGIN_URI),
+        r = self.post(self.gpgauth_uri(self.LOGIN_URI),
                       json={'gpg_auth': {
                           'keyid': self.user_fingerprint,
                           'user_token_result': self.user_auth_token,
@@ -339,7 +319,7 @@ class GPGAuthSession(Session):
         logger.info('authenticated_with_token(): OK')
 
     def is_authenticated(self):
-        r = self.get(self.build_absolute_auth_uri(self.CHECKSESSION_URI))
+        r = self.get(self.gpgauth_uri(self.CHECKSESSION_URI))
         return r.status_code not in [401, 403]
 
     def authenticate(self):

@@ -25,8 +25,6 @@ from requests.structures import CaseInsensitiveDict
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
 
-from requests_gpgauthlib.exceptions import GPGAuthException
-
 
 def test_init_void():
     # No Arguments, it fails
@@ -43,24 +41,21 @@ class TestGPGAuthSession:
                                  'https://inexistant.example.com/', '/auth/',
                                  '6810A8F7728F4A7CE936F93BA27743FA0C9E83E0')
 
-    @patch('requests_gpgauthlib.gpgauth_session.GPGAuthAPI.verify')
-    def test_gpgauth_version_is_supported_raises_in_absence_of_headers(self, verify):
-        verify.return_value = Response()
-        with pytest.raises(GPGAuthException):
-            assert not self.ga.gpgauth_version_is_supported
+    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
+    def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, get_verify):
+        get_verify.return_value = Response()
+        assert not self.ga.gpgauth_version_is_supported
 
-    @patch('requests_gpgauthlib.gpgauth_session.GPGAuthAPI.verify')
-    def test_gpgauth_version_is_supported_raises_for_wrong_versions(self, verify):
+    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
+    def test_gpgauth_version_is_supported_not_for_wrong_versions(self, get_verify):
         r = Response()
         r.headers = CaseInsensitiveDict(data={'X-GPGAuth-Version': '1.2'})
-        verify.return_value = r
-        with pytest.raises(GPGAuthException):
-            assert not self.ga.gpgauth_version_is_supported
+        get_verify.return_value = r
+        assert not self.ga.gpgauth_version_is_supported
 
-    @patch('requests_gpgauthlib.gpgauth_session.GPGAuthAPI.verify')
-    def test_gpgauth_version_is_supported_works(self, verify):
+    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
+    def test_gpgauth_version_is_supported_works(self, get_verify):
         r = Response()
         r.headers = CaseInsensitiveDict(data={'X-GPGAuth-Version': '1.3.0'})
-        verify.return_value = r
-
+        get_verify.return_value = r
         assert self.ga.gpgauth_version_is_supported

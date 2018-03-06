@@ -144,7 +144,5 @@ def test_import_user_private_key_from_file_works(caplog):
         # That we logged what we wanted
         assert caplog.record_tuples == [
             ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected'),
-            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint),
-            # FIXME: Check why that message is output twice
             ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint)
         ]
