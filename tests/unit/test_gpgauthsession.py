@@ -25,8 +25,7 @@ from requests.structures import CaseInsensitiveDict
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
 
-from requests_gpgauthlib.exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
-                         GPGAuthStage2Exception)
+from requests_gpgauthlib.exceptions import GPGAuthException
 
 
 def test_init_void():
@@ -40,14 +39,15 @@ class TestGPGAuthSession:
     def setup_class(self):
         # Setup
         self.gpg = create_gpg(get_temporary_workdir().name)
-        self.ga = GPGAuthSession(self.gpg, 'https://inexistant.example.com/', '/auth/', '6810A8F7728F4A7CE936F93BA27743FA0C9E83E0')
+        self.ga = GPGAuthSession(self.gpg,
+                                 'https://inexistant.example.com/', '/auth/',
+                                 '6810A8F7728F4A7CE936F93BA27743FA0C9E83E0')
 
     @patch('requests_gpgauthlib.gpgauth_session.GPGAuthAPI.verify')
     def test_gpgauth_version_is_supported_raises_in_absence_of_headers(self, verify):
         verify.return_value = Response()
         with pytest.raises(GPGAuthException):
             assert not self.ga.gpgauth_version_is_supported
-
 
     @patch('requests_gpgauthlib.gpgauth_session.GPGAuthAPI.verify')
     def test_gpgauth_version_is_supported_raises_for_wrong_versions(self, verify):

@@ -1,4 +1,3 @@
-
 # requests_gpgauthlib -- A GPGAuth python-requests Authentication lib
 # Copyright (C) 2018 Didier Raboud <odyx@liip.ch>
 #
