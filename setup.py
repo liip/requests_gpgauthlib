@@ -10,7 +10,7 @@ setup(name='requests_gpgauthlib',
       url='https://github.com/liip/requests_gpgauthlib',
       install_requires=[
           'python-gnupg',
-          'requests'
+          'requests',
       ],
       tests_require=[
           'pytest',

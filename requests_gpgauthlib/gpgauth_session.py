@@ -25,7 +25,7 @@ from uuid import uuid4
 from requests import Session
 
 from .gpgauth_api import get_verify
-from .gpgauth_protocol import check_verify_headers
+from .gpgauth_protocol import check_verify, get_server_keydata, get_server_fingerprint
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -95,10 +95,29 @@ class GPGAuthSession(Session):
 
     @property
     def gpgauth_version_is_supported(self):
-        return check_verify_headers(get_verify(self).headers)
+        return check_verify(get_verify(self))
 
     @property
     def server_fingerprint(self):
+        verify = get_verify(self)
+        if not check_verify(verify, check_content=True):
+            raise GPGAuthException("Verify endpoint wrongly formatted")
+
+        verify_json = verify.json()
+        server_claimed_fingerprint = get_server_fingerprint(verify_json)
+        server_claimed_key = get_server_keydata(verify_json)
+
+        # Import the key from the verify object
+        import_result = self.gpg.import_keys(server_claimed_key)
+        if server_claimed_fingerprint not in import_result.fingerprints:
+            raise GPGAuthException(
+                "Claimed server fingerprint %s doesn't match the claimed server key." %
+                server_claimed_fingerprint
+            )
+        return server_claimed_fingerprint
+
+    @property
+    def old_server_fingerprint(self):
         if hasattr(self, '_server_key'):
             return self._server_fingerprint
 
