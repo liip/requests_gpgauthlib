@@ -16,7 +16,6 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 
 import logging
-from json import JSONDecodeError
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ def check_verify(response, check_content=False):
     if check_content:
         try:
             j = response.json()
-        except JSONDecodeError:
+        except ValueError:
             logger.warning("GPGAuth Verify body is no json")
             return False
         if 'body' not in j:
