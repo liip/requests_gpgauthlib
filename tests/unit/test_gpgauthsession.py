@@ -111,5 +111,7 @@ class TestGPGAuthSession:
 
         # Check that the server key was imported
         local_keys = {key['fingerprint']: key for key in self.gpg.list_keys()}
-
-        assert self.server_key.fingerprint in local_keys
+        # Take the fingerprint from the self.ga object on purpose…
+        assert self.ga.server_fingerprint in local_keys
+        # … to verifiy the get was only performed once
+        assert requests_mock.call_count == 1

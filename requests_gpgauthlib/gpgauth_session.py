@@ -19,6 +19,7 @@ import logging
 import os
 
 from http.cookiejar import MozillaCookieJar
+from functools import lru_cache
 from urllib.parse import unquote_plus
 from uuid import uuid4
 
@@ -97,6 +98,7 @@ class GPGAuthSession(Session):
         return check_verify(get_verify(self))
 
     @property
+    @lru_cache()
     def server_fingerprint(self):
         verify = get_verify(self)
         if not check_verify(verify, check_content=True):
