@@ -15,15 +15,25 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 
+import json
 import pytest
 
 from mock import patch
 
 from requests import Response
 from requests.structures import CaseInsensitiveDict
+import requests_mock as rm_module
 
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
+from requests_gpgauthlib.exceptions import GPGAuthException
+
+
+
+@pytest.fixture
+def requests_mock(request):
+    with rm_module.Mocker() as m:
+        yield m
 
 
 def test_init_void():
@@ -41,21 +51,14 @@ class TestGPGAuthSession:
                                  'https://inexistant.example.com/', '/auth/',
                                  '6810A8F7728F4A7CE936F93BA27743FA0C9E83E0')
 
-    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
-    def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, get_verify):
-        get_verify.return_value = Response()
+    def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, requests_mock):
+        requests_mock.get('/auth/verify.json')
         assert not self.ga.gpgauth_version_is_supported
 
-    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
-    def test_gpgauth_version_is_supported_not_for_wrong_versions(self, get_verify):
-        r = Response()
-        r.headers = CaseInsensitiveDict(data={'X-GPGAuth-Version': '1.2'})
-        get_verify.return_value = r
+    def test_gpgauth_version_is_supported_not_for_wrong_versions(self, requests_mock):
+        requests_mock.get('/auth/verify.json', headers={'X-GPGAuth-Version': '1.2'})
         assert not self.ga.gpgauth_version_is_supported
 
-    @patch('requests_gpgauthlib.gpgauth_session.get_verify')
-    def test_gpgauth_version_is_supported_works(self, get_verify):
-        r = Response()
-        r.headers = CaseInsensitiveDict(data={'X-GPGAuth-Version': '1.3.0'})
-        get_verify.return_value = r
+    def test_gpgauth_version_is_supported_works(self,  requests_mock):
+        requests_mock.get('/auth/verify.json', headers={'X-GPGAuth-Version': '1.3.0'})
         assert self.ga.gpgauth_version_is_supported
