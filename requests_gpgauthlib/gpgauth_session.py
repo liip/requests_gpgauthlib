@@ -118,39 +118,6 @@ class GPGAuthSession(Session):
         return server_claimed_fingerprint
 
     @property
-    def old_server_fingerprint(self):
-        if hasattr(self, '_server_key'):
-            return self._server_fingerprint
-
-        if not self.gpgauth_version_is_supported:
-            return False
-
-        # Try to get them from GPG
-        server_key = self.gpg.export_keys([self._server_fingerprint], secret=False)
-        if 'BEGIN PGP PUBLIC KEY BLOCK' in server_key:
-            self._server_key = server_key
-            return self._server_fingerprint
-
-        # Try to get it from the server
-        r = self.get(self.gpgauth_uri(self.VERIFY_URI))
-        if r.json()['body']['fingerprint'] != self._server_fingerprint:
-            raise GPGAuthException(
-                "Hoped server fingerprint %s doesn't match the server's %s" %
-                (self._server_fingerprint, r.json()['body']['fingerprint'])
-            )
-        _server_key = r.json()['body']['keydata']
-        import_result = self.gpg.import_keys(_server_key)
-        if self._server_fingerprint not in import_result.fingerprints:
-            raise GPGAuthException(
-                "Hoped server fingerprint %s doesn't match the server key." %
-                self._server_fingerprint
-            )
-        logger.info('server_fingerprint(): 0x%s '
-                    'imported successfully' % self._server_fingerprint)
-        self._server_key = _server_key
-        return self._server_fingerprint
-
-    @property
     def user_fingerprint(self):
         try:
             return self._user_fingerprint
