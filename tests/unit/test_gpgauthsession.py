@@ -108,3 +108,8 @@ class TestGPGAuthSession:
                           }
                           )
         assert self.ga.server_fingerprint == self.server_key.fingerprint
+
+        # Check that the server key was imported
+        local_keys = {key['fingerprint']: key for key in self.gpg.list_keys()}
+
+        assert self.server_key.fingerprint in local_keys
