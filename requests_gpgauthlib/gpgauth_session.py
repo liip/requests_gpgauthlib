@@ -43,7 +43,7 @@ class GPGAuthSession(Session):
     # This is passbolt_api's version
     GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
-    def __init__(self, gpg, server_url, auth_uri, server_fingerprint, **kwargs):
+    def __init__(self, gpg, server_url, auth_uri, **kwargs):
         """Construct a new GPGAuth client session.
         :param gpg: GPG object to handle crypto stuff
         :param server_url: URL to the server, eg. https://gpg.example.com/
@@ -58,7 +58,6 @@ class GPGAuthSession(Session):
         self.auth_uri = auth_uri.rstrip('/')
 
         self.gpg = gpg
-        self._server_fingerprint = server_fingerprint
 
         self._cookie_filename = os.path.join(get_workdir(), 'gpgauth_session_cookies')
         self.cookies = MozillaCookieJar(self._cookie_filename)

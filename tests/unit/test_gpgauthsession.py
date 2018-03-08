@@ -39,16 +39,11 @@ def test_init_void():
 class TestGPGAuthSession:
 
     def setup_class(self):
-        # Setup
-        self.gpg = create_gpg(get_temporary_workdir().name)
-        self.ga = GPGAuthSession(self.gpg,
-                                 'https://inexistant.example.com/', '/auth/',
-                                 '6810A8F7728F4A7CE936F93BA27743FA0C9E83E0')
-
         # Setup a server
         self.server_gpg = create_gpg(get_temporary_workdir().name)
         self.server_passphrase = 'server-sicrit-passphrase'
-        input_data = self.server_gpg.gen_key_input(key_length=1024, passphrase=self.server_passphrase)
+        input_data = self.server_gpg.gen_key_input(
+          key_length=1024, passphrase=self.server_passphrase, name_email='server@inexistant.example.com')
 
         # Generate the key, making sure it worked
         self.server_key = self.server_gpg.gen_key(input_data)
@@ -59,6 +54,11 @@ class TestGPGAuthSession:
             self.server_key.fingerprint,
             armor=True, minimal=True, passphrase=self.server_passphrase)
         assert self.server_keydata
+
+        # Setup a user
+        self.gpg = create_gpg(get_temporary_workdir().name)
+        self.ga = GPGAuthSession(self.gpg,
+                                 'https://inexistant.example.com/', '/auth/')
 
     def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, requests_mock):
         requests_mock.get('/auth/verify.json')
