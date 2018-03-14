@@ -19,10 +19,13 @@ import pytest
 
 import requests_mock as rm_module
 
+from uuid import uuid4
+from urllib.parse import quote
+
 from requests_gpgauthlib.gpgauth_protocol import GPGAUTH_SUPPORTED_VERSION
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
-from requests_gpgauthlib.exceptions import GPGAuthException, GPGAuthStage0Exception
+from requests_gpgauthlib.exceptions import GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception
 
 
 @pytest.fixture
@@ -74,6 +77,18 @@ class TestGPGAuthSession:
         # Generate the key, making sure it worked
         self.user_key = self.gpg.gen_key(input_data)
         assert self.user_key.fingerprint
+
+        # Use private API to set the passphrase
+        self.ga._user_passphrase = self.user_passphrase
+
+        # Export the user key
+        self.user_keydata = self.gpg.export_keys(
+            self.user_key.fingerprint,
+            armor=True, minimal=True)
+        assert self.user_keydata
+        # … and import it in the server keyring
+        import_result = self.server_gpg.import_keys(self.user_keydata)
+        assert self.user_key.fingerprint in import_result.fingerprints
 
     def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, requests_mock):
         requests_mock.get('/auth/verify.json')
@@ -168,12 +183,31 @@ class TestGPGAuthSession:
                            )
         assert self.ga.server_identity_is_verified
 
-    def test_is_logged_in(self, requests_mock):
+    def test_user_auth_token_raises_if_cant_decrypt(self, requests_mock):
         requests_mock.post('/auth/login.json',
                            headers={
                              'X-GPGAuth-Authenticated': 'false',
                              'X-GPGAuth-Progress': 'stage1',
-                             'X-GPGAuth-User-Auth-Token': self.ga._nonce0,
+                             'X-GPGAuth-User-Auth-Token': 'broken',
                              }
                            )
-        assert self.ga.is_logged_in
+
+        with pytest.raises(GPGAuthStage1Exception):
+            assert self.ga.user_auth_token
+
+    def test_user_auth_token(self, requests_mock):
+        server_nonce = 'gpgauthv{v}|36|{uuid}|gpgauthv{v}'.format(v=GPGAUTH_SUPPORTED_VERSION, uuid=uuid4())
+        # The server encrypt it towards the user if the account exists
+        user_auth_token = self.server_gpg.encrypt(server_nonce, self.user_key.fingerprint, always_trust=True)
+        assert user_auth_token.ok
+        # Format the user_auth_token as we see it in the wild
+        prepared_user_auth_token = quote(str(user_auth_token)).replace('%20', '+')
+
+        requests_mock.post('/auth/login.json',
+                           headers={
+                             'X-GPGAuth-Authenticated': 'false',
+                             'X-GPGAuth-Progress': 'stage1',
+                             'X-GPGAuth-User-Auth-Token': prepared_user_auth_token,
+                             }
+                           )
+        assert self.ga.user_auth_token

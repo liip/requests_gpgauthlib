@@ -19,7 +19,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-GPGAUTH_SUPPORTED_VERSION = "1.3.0"
+# This is passbolt_api's version
+GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
 
 def check_verify(response, check_content=False):

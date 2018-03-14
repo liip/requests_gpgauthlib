@@ -27,7 +27,7 @@ from requests import Session
 
 from .gpgauth_api import get_verify, post_server_verify_token, post_log_in
 from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
-                               check_server_login_response)
+                               check_server_login_response, GPGAUTH_SUPPORTED_VERSION)
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -41,9 +41,6 @@ class GPGAuthSession(Session):
     VERIFY_URI = '/verify.json'
     LOGIN_URI = '/login.json'
     CHECKSESSION_URI = '/checkSession.json'
-
-    # This is passbolt_api's version
-    GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 
     def __init__(self, gpg, server_url, auth_uri, **kwargs):
         """Construct a new GPGAuth client session.
@@ -86,10 +83,7 @@ class GPGAuthSession(Session):
     def _nonce0(self):
         # This format is stolen from
         # https://github.com/passbolt/passbolt_cli/blob/master/app/models/gpgAuthToken.js
-        __nonce0 = 'gpgauthv%s|36|' % self.GPGAUTH_SUPPORTED_VERSION
-        __nonce0 += str(uuid4())
-        __nonce0 += '|gpgauthv%s' % self.GPGAUTH_SUPPORTED_VERSION
-        return __nonce0
+        return 'gpgauthv{v}|36|{uuid}|gpgauthv{v}'.format(v=GPGAUTH_SUPPORTED_VERSION, uuid=uuid4())
 
     @property
     def gpgauth_version_is_supported(self):
@@ -128,15 +122,6 @@ class GPGAuthSession(Session):
         return secret_keys.fingerprints[0]
 
     @property
-    def user_auth_token(self):
-        try:
-            return self._user_auth_token
-        except AttributeError:
-            pass
-        self.logged_in()
-        return self._user_auth_token
-
-    @property
     @lru_cache()
     def server_identity_is_verified(self):
         """ GPGAuth stage0 """
@@ -168,7 +153,7 @@ class GPGAuthSession(Session):
         return True
 
     @property
-    def is_logged_in(self):
+    def user_auth_token(self):
         """ GPGAuth Stage1 """
 
         # stage0 is a prequisite
@@ -188,13 +173,23 @@ class GPGAuthSession(Session):
             server_login_response.headers.get('X-GPGAuth-User-Auth-Token')
             .replace('\\\\', '\\')
         ).replace('\\ ', ' ')
+
         logger.info('Decrypting the user authentication token; '
                     'password prompt expected')
-        self._user_auth_token = str(
-            self.gpg.decrypt(encrypted_user_auth_token, always_trust=True)
-        )
-        logger.info('logged_in(): OK')
-        return True
+
+        passphrase = None
+        # For the sake of tests, allow one to set the passphrase onto
+        # the object
+        if hasattr(self, '_user_passphrase'):
+            passphrase = self._user_passphrase
+
+        user_auth_token = self.gpg.decrypt(encrypted_user_auth_token, always_trust=True, passphrase=passphrase)
+
+        if not user_auth_token.ok:
+            raise GPGAuthStage1Exception("Auth token decryption failed")
+
+        logger.info('user_auth_token(): %s', user_auth_token)
+        return str(user_auth_token)
 
     def authenticated_with_token(self):
         """ GPGAuth Stage 2 """
@@ -248,5 +243,5 @@ class GPGAuthSession(Session):
 
     # GPGAuth stages in numerical form
     stage0 = server_identity_is_verified
-    stage1 = is_logged_in
+    stage1 = user_auth_token
     stage2 = authenticated_with_token
