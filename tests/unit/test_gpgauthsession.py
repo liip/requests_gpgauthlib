@@ -22,7 +22,7 @@ import requests_mock as rm_module
 from requests_gpgauthlib.gpgauth_protocol import GPGAUTH_SUPPORTED_VERSION
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
-from requests_gpgauthlib.exceptions import GPGAuthException
+from requests_gpgauthlib.exceptions import GPGAuthException, GPGAuthStage0Exception
 
 
 @pytest.fixture
@@ -139,3 +139,31 @@ class TestGPGAuthSession:
 
     def test_user_fingerprint_works_with_key(self):
         assert self.ga.user_fingerprint == self.user_key.fingerprint
+
+    def test_server_identity_is_verified_raises(self, requests_mock):
+        requests_mock.post('/auth/verify.json',
+                          headers={'X-GPGAuth-Authenticated': 'true'}
+                          )
+        with pytest.raises(GPGAuthStage0Exception):
+            assert self.ga.server_identity_is_verified
+
+    def test_server_identity_is_verified_wrong_nonce_raises(self, requests_mock):
+        requests_mock.post('/auth/verify.json',
+                          headers={
+                              'X-GPGAuth-Authenticated': 'false',
+                              'X-GPGAuth-Progress': 'stage0',
+                              'X-GPGAuth-Verify-Response': 'broken_nonce',
+                          }
+                          )
+        with pytest.raises(GPGAuthStage0Exception):
+            assert self.ga.server_identity_is_verified
+
+    def test_server_identity_is_verified_wrong_signature_raises(self, requests_mock):
+        requests_mock.post('/auth/verify.json',
+                          headers={
+                              'X-GPGAuth-Authenticated': 'false',
+                              'X-GPGAuth-Progress': 'stage0',
+                              'X-GPGAuth-Verify-Response': self.ga._nonce0,
+                          }
+                          )
+        assert self.ga.server_identity_is_verified

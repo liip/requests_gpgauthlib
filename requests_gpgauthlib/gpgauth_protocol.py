@@ -23,13 +23,10 @@ GPGAUTH_SUPPORTED_VERSION = "1.3.0"
 
 
 def check_verify(response, check_content=False):
-    if 'X-GPGAuth-Version' not in response.headers:
-        logger.debug(response.headers)
-        return False
-    if response.headers['X-GPGAuth-Version'] != GPGAUTH_SUPPORTED_VERSION:
+    if response.headers.get('X-GPGAuth-Version') != GPGAUTH_SUPPORTED_VERSION:
         logger.warning(
             "GPGAuth Version not supported (%s != %s)",
-            response.headers['X-GPGAuth-Version'],
+            response.headers.get('X-GPGAuth-Version'),
             GPGAUTH_SUPPORTED_VERSION
         )
         return False
@@ -51,10 +48,10 @@ def check_verify(response, check_content=False):
 
 
 def check_server_verify_response(response):
-    if response.headers['X-GPGAuth-Authenticated'] != 'false':
+    if response.headers.get('X-GPGAuth-Authenticated') != 'false':
         logger.warning('Stage0: X-GPGAuth-Authenticated should be set to false')
         return False
-    if response.headers['X-GPGAuth-Progress'] != 'stage0':
+    if response.headers.get('X-GPGAuth-Progress') != 'stage0':
         logger.warning('Stage0: X-GPGAuth-Progress should be set to stage0')
         return False
     if 'X-GPGAuth-User-Auth-Token' in response.headers:

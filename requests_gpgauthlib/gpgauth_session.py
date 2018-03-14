@@ -158,11 +158,11 @@ class GPGAuthSession(Session):
         if not check_server_verify_response(server_verify_response):
             raise GPGAuthStage0Exception("Verify endpoint wrongly formatted")
 
-        if server_verify_response.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
+        if server_verify_response.headers.get('X-GPGAuth-Verify-Response') != self._nonce0:
             raise GPGAuthStage0Exception(
                 'The server decrypted something different than what we sent '
                 '(%s <> %s)' %
-                (server_verify_response.headers['X-GPGAuth-Verify-Response'], self._nonce0))
+                (server_verify_response.headers.get('X-GPGAuth-Verify-Response'), self._nonce0))
         logger.info('server_identity_is_verified: OK')
         return True
 
