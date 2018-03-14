@@ -78,7 +78,7 @@ class GPGAuthSession(Session):
         Return the given URI in an absolute form with the server name and the auth URI prefix, eg.
         https://secure.example.com/auth/uri/.
         """
-        return self.build_absolute_uri(self.auth_uri + uri)
+        return self.build_absolute_uri(self.auth_uri + uri + '?api-version=v2')
 
     @property
     @lru_cache()
