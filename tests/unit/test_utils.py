@@ -22,6 +22,7 @@ import os
 from gnupg import GPG
 from mock import call, patch
 from tempfile import NamedTemporaryFile
+from tempfile import TemporaryDirectory
 from test.support import EnvironmentVarGuard
 
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir, get_workdir, import_user_private_key_from_file
@@ -30,9 +31,9 @@ from requests_gpgauthlib.exceptions import GPGAuthKeyImportError
 
 @patch('os.makedirs')
 def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs, caplog):
-    test_home = '/requests-gpgauth-home'
-    EnvironmentVarGuard().set('HOME', test_home)
-    workdir = os.path.join(test_home, '.config', 'requests_gpgauthlib')
+    homedir = TemporaryDirectory(suffix='-home')
+    EnvironmentVarGuard().set('HOME', homedir.name)
+    workdir = os.path.join(homedir.name, '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
     assert get_workdir() == workdir
@@ -43,7 +44,8 @@ def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs, caplog):
 @patch('os.makedirs')
 def test_get_workdir_gives_tmp_if_HOME_is_not_in_env(makedirs, caplog):
     EnvironmentVarGuard().unset('HOME')
-    workdir = os.path.join('/tmp/requests_gpgauthlib', '.config', 'requests_gpgauthlib')
+    homedir = TemporaryDirectory(suffix='-no-home')
+    workdir = os.path.join(homedir.name, '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
     assert get_workdir() == workdir
@@ -88,30 +90,34 @@ def test_get_temporary_workdir_is_different():
 
 
 def test_create_gpg_gives_a_GPG_object():
-    assert isinstance(create_gpg(get_temporary_workdir().name), GPG)
+    workdir = get_temporary_workdir()
+    assert isinstance(create_gpg(workdir.name), GPG)
 
 
 def test_create_gpg_has_its_home_where_we_say_we_want_it():
-    workdir = get_temporary_workdir().name
-    gpg = create_gpg(workdir)
-    assert workdir in gpg.gnupghome
+    workdir = get_temporary_workdir()
+    gpg = create_gpg(workdir.name)
+    assert workdir.name in gpg.gnupghome
 
 
 def test_import_user_private_key_from_inexistant_file_raises():
-    gpg = create_gpg(get_temporary_workdir().name)
+    gpghome = get_temporary_workdir()
+    gpg = create_gpg(gpghome.name)
     with pytest.raises(FileNotFoundError):
         import_user_private_key_from_file(gpg, '/inexistant')
 
 
 def test_import_user_private_key_from_empty_file_raises():
-    gpg = create_gpg(get_temporary_workdir().name)
+    gpghome = get_temporary_workdir()
+    gpg = create_gpg(gpghome.name)
     with NamedTemporaryFile(mode='w') as empty_key_file:
         with pytest.raises(GPGAuthKeyImportError):
             import_user_private_key_from_file(gpg, empty_key_file.name)
 
 
 def test_import_user_private_key_from_file_works(caplog):
-    gpg_generator = create_gpg(get_temporary_workdir().name)
+    gpg_generator_home = get_temporary_workdir()
+    gpg_generator = create_gpg(gpg_generator_home.name)
 
     # Generate a key
     passphrase = 'test-passphrase'
@@ -134,7 +140,8 @@ def test_import_user_private_key_from_file_works(caplog):
         private_key_file.flush()
 
         # Setup a different gpg home
-        gpg = create_gpg(get_temporary_workdir().name)
+        gpg_home = get_temporary_workdir()
+        gpg = create_gpg(gpg_home.name)
 
         caplog.set_level(logging.INFO)
 

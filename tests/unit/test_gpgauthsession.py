@@ -41,7 +41,8 @@ class TestGPGAuthSession:
 
     def setup_class(self):
         # Setup a server
-        self.server_gpg = create_gpg(get_temporary_workdir().name)
+        self.server_gnupg_home = get_temporary_workdir()
+        self.server_gpg = create_gpg(self.server_gnupg_home.name)
         self.server_passphrase = 'server-sicrit-passphrase'
         input_data = self.server_gpg.gen_key_input(
           key_length=1024, passphrase=self.server_passphrase, name_email='server@inexistant.example.com')
@@ -57,9 +58,22 @@ class TestGPGAuthSession:
         assert self.server_keydata
 
         # Setup a user
-        self.gpg = create_gpg(get_temporary_workdir().name)
+        self.gnupg_home = get_temporary_workdir()
+        self.gpg = create_gpg(self.gnupg_home.name)
         self.ga = GPGAuthSession(self.gpg,
                                  'https://inexistant.example.com/', '/auth/')
+
+        self.user_passphrase = 'user-sicrit-passphrase'
+        input_data = self.gpg.gen_key_input(
+          key_length=1024, passphrase=self.user_passphrase, name_email='user@inexistant.example.com')
+
+        # test_user_fingerprint_raises_without_key
+        with pytest.raises(GPGAuthException):
+            assert self.ga.user_fingerprint
+
+        # Generate the key, making sure it worked
+        self.user_key = self.gpg.gen_key(input_data)
+        assert self.user_key.fingerprint
 
     def test_gpgauth_version_is_supported_not_in_absence_of_headers(self, requests_mock):
         requests_mock.get('/auth/verify.json')
