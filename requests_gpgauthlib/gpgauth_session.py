@@ -81,17 +81,14 @@ class GPGAuthSession(Session):
         return self.build_absolute_uri(self.auth_uri + uri)
 
     @property
+    @lru_cache()
     def _nonce0(self):
-        try:
-            return self.__nonce0
-        except AttributeError:
-            pass
         # This format is stolen from
         # https://github.com/passbolt/passbolt_cli/blob/master/app/models/gpgAuthToken.js
-        self.__nonce0 = 'gpgauthv%s|36|' % self.GPGAUTH_SUPPORTED_VERSION
-        self.__nonce0 += str(uuid4())
-        self.__nonce0 += '|gpgauthv%s' % self.GPGAUTH_SUPPORTED_VERSION
-        return self.__nonce0
+        __nonce0 = 'gpgauthv%s|36|' % self.GPGAUTH_SUPPORTED_VERSION
+        __nonce0 += str(uuid4())
+        __nonce0 += '|gpgauthv%s' % self.GPGAUTH_SUPPORTED_VERSION
+        return __nonce0
 
     @property
     def gpgauth_version_is_supported(self):
