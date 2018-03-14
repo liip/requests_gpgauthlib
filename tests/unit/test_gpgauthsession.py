@@ -122,3 +122,6 @@ class TestGPGAuthSession:
 
     def test_nonce0_contains_version(self):
         assert GPGAUTH_SUPPORTED_VERSION in self.ga._nonce0
+
+    def test_user_fingerprint_works_with_key(self):
+        assert self.ga.user_fingerprint == self.user_key.fingerprint

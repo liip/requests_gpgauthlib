@@ -115,12 +115,8 @@ class GPGAuthSession(Session):
         return server_claimed_fingerprint
 
     @property
+    @lru_cache()
     def user_fingerprint(self):
-        try:
-            return self._user_fingerprint
-        except AttributeError:
-            pass
-
         # Try to get them from GPG
         secret_keys = self.gpg.list_keys(secret=True)
         if not secret_keys:
@@ -128,8 +124,7 @@ class GPGAuthSession(Session):
                 'No user fingerprint was loaded! You need to call import_user_private_key_from_file() first!'
             )
         # Assume the main key is the first
-        self._user_fingerprint = secret_keys.fingerprints[0]
-        return self._user_fingerprint
+        return secret_keys.fingerprints[0]
 
     @property
     def user_auth_token(self):
