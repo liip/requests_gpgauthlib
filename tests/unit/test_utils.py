@@ -44,8 +44,7 @@ def test_get_workdir_gives_homedir_if_HOME_is_in_env(makedirs, caplog):
 @patch('os.makedirs')
 def test_get_workdir_gives_tmp_if_HOME_is_not_in_env(makedirs, caplog):
     EnvironmentVarGuard().unset('HOME')
-    homedir = TemporaryDirectory(suffix='-no-home')
-    workdir = os.path.join(homedir.name, '.config', 'requests_gpgauthlib')
+    workdir = os.path.join('/tmp/requests_gpgauthlib', '.config', 'requests_gpgauthlib')
     caplog.set_level(logging.WARNING)
 
     assert get_workdir() == workdir
