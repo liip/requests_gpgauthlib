@@ -25,8 +25,9 @@ from uuid import uuid4
 
 from requests import Session
 
-from .gpgauth_api import get_verify, post_server_verify_token
-from .gpgauth_protocol import check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response
+from .gpgauth_api import get_verify, post_server_verify_token, post_log_in
+from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
+                               check_server_login_response)
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -166,55 +167,25 @@ class GPGAuthSession(Session):
         logger.info('server_identity_is_verified: OK')
         return True
 
-    def logged_in(self):
+    @property
+    def is_logged_in(self):
         """ GPGAuth Stage1 """
-        """ Get and decrypt a verification given by the server """
-        try:
-            self._user_auth_token
-            return
-        except AttributeError:
-            pass
 
-        # Prerequisite
-        self.server_identity_verified()
+        # stage0 is a prequisite
+        if not self.server_identity_is_verified:
+            return False
 
-        r = self.post(
-            self.gpgauth_uri(self.LOGIN_URI),
-            json={'gpg_auth': {'keyid': self.user_fingerprint}}
+        server_login_response = post_log_in(
+            self,
+            keyid=self.user_fingerprint
         )
 
-        validation_errors = []
-        if r.headers['X-GPGAuth-Authenticated'] != 'false':
-            validation_errors.append(
-                GPGAuthStage1Exception(
-                    'X-GPGAuth-Authenticated should be set to false'))
-        if r.headers['X-GPGAuth-Progress'] != 'stage1':
-            validation_errors.append(
-                GPGAuthStage1Exception(
-                    'X-GPGAuth-Progress should be set to stage1'))
-        if 'X-GPGAuth-User-Auth-Token' not in r.headers:
-            validation_errors.append(
-                GPGAuthStage1Exception(
-                    'X-GPGAuth-User-Auth-Token should be set'))
-        if 'X-GPGAuth-Verify-Response' in r.headers:
-            validation_errors.append(
-                GPGAuthStage1Exception(
-                    'X-GPGAuth-Verify-Response should not be set'))
-        if 'X-GPGAuth-Refer' in r.headers:
-            validation_errors.append(
-                GPGAuthStage1Exception(
-                    'X-GPGAuth-Refer should not be set'))
-
-        if validation_errors:
-            logger.debug(r.headers)
-            if 'X-GPGAuth-Debug' in r.headers:
-                raise GPGAuthStage1Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
-            else:
-                raise validation_errors.pop()
+        if not check_server_login_response(server_login_response):
+            raise GPGAuthStage1Exception("Login endpoint wrongly formatted")
 
         # Get the encrypted User Auth Token
         encrypted_user_auth_token = unquote_plus(
-            r.headers['X-GPGAuth-User-Auth-Token']
+            server_login_response.headers.get('X-GPGAuth-User-Auth-Token')
             .replace('\\\\', '\\')
         ).replace('\\ ', ' ')
         logger.info('Decrypting the user authentication token; '
@@ -223,6 +194,7 @@ class GPGAuthSession(Session):
             self.gpg.decrypt(encrypted_user_auth_token, always_trust=True)
         )
         logger.info('logged_in(): OK')
+        return True
 
     def authenticated_with_token(self):
         """ GPGAuth Stage 2 """
@@ -276,5 +248,5 @@ class GPGAuthSession(Session):
 
     # GPGAuth stages in numerical form
     stage0 = server_identity_is_verified
-    stage1 = logged_in
+    stage1 = is_logged_in
     stage2 = authenticated_with_token

@@ -158,7 +158,7 @@ class TestGPGAuthSession:
         with pytest.raises(GPGAuthStage0Exception):
             assert self.ga.server_identity_is_verified
 
-    def test_server_identity_is_verified_wrong_signature_raises(self, requests_mock):
+    def test_server_identity_is_verified(self, requests_mock):
         requests_mock.post('/auth/verify.json',
                            headers={
                              'X-GPGAuth-Authenticated': 'false',
@@ -167,3 +167,13 @@ class TestGPGAuthSession:
                              }
                            )
         assert self.ga.server_identity_is_verified
+
+    def test_is_logged_in(self, requests_mock):
+        requests_mock.post('/auth/login.json',
+                           headers={
+                             'X-GPGAuth-Authenticated': 'false',
+                             'X-GPGAuth-Progress': 'stage1',
+                             'X-GPGAuth-User-Auth-Token': self.ga._nonce0,
+                             }
+                           )
+        assert self.ga.is_logged_in
