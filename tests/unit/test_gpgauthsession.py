@@ -19,6 +19,7 @@ import pytest
 
 import requests_mock as rm_module
 
+from requests_gpgauthlib.gpgauth_protocol import GPGAUTH_SUPPORTED_VERSION
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
 from requests_gpgauthlib.exceptions import GPGAuthException
@@ -115,3 +116,9 @@ class TestGPGAuthSession:
         assert self.ga.server_fingerprint in local_keys
         # … to verifiy the get was only performed once
         assert requests_mock.call_count == 1
+
+    def test_nonce0_is_constant(self):
+        assert self.ga._nonce0 == self.ga._nonce0
+
+    def test_nonce0_contains_version(self):
+        assert GPGAUTH_SUPPORTED_VERSION in self.ga._nonce0

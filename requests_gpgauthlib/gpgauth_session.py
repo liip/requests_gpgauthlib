@@ -25,8 +25,8 @@ from uuid import uuid4
 
 from requests import Session
 
-from .gpgauth_api import get_verify
-from .gpgauth_protocol import check_verify, get_server_keydata, get_server_fingerprint
+from .gpgauth_api import get_verify, post_server_verify_token
+from .gpgauth_protocol import check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -143,13 +143,10 @@ class GPGAuthSession(Session):
         self.logged_in()
         return self._user_auth_token
 
-    def server_identity_verified(self):
+    @property
+    @lru_cache()
+    def server_identity_is_verified(self):
         """ GPGAuth stage0 """
-        try:
-            return self._server_identity_verified
-        except AttributeError:
-            pass
-
         # Encrypt a uuid token for the server
         server_verify_token = self.gpg.encrypt(self._nonce0,
                                                self.server_fingerprint, always_trust=True)
@@ -160,51 +157,22 @@ class GPGAuthSession(Session):
                 (self._nonce0, self.server_fingerprint)
             )
 
-        r = self.post(
-            self.gpgauth_uri(self.VERIFY_URI),
-            json={'gpg_auth': {
-                'keyid': self.user_fingerprint,
-                'server_verify_token': str(server_verify_token)
-                }
-            },
+        server_verify_response = post_server_verify_token(
+            self,
+            keyid=self.user_fingerprint,
+            server_verify_token=str(server_verify_token)
         )
 
-        validation_errors = []
-        if r.headers['X-GPGAuth-Authenticated'] != 'false':
-            validation_errors.append(
-                GPGAuthStage0Exception(
-                    'X-GPGAuth-Authenticated should be set to false'))
-        if r.headers['X-GPGAuth-Progress'] != 'stage0':
-            validation_errors.append(
-                GPGAuthStage0Exception(
-                    'X-GPGAuth-Progress should be set to stage0'))
-        if 'X-GPGAuth-User-Auth-Token' in r.headers:
-            validation_errors.append(
-                GPGAuthStage0Exception(
-                    'X-GPGAuth-User-Auth-Token should not be set'))
-        if 'X-GPGAuth-Verify-Response' not in r.headers:
-            validation_errors.append(
-                GPGAuthStage0Exception(
-                    'X-GPGAuth-Verify-Response should be set'))
-        if 'X-GPGAuth-Refer' in r.headers:
-            validation_errors.append(
-                GPGAuthStage0Exception(
-                    'X-GPGAuth-Refer should not be set'))
+        if not check_server_verify_response(server_verify_response):
+            raise GPGAuthStage0Exception("Verify endpoint wrongly formatted")
 
-        if validation_errors:
-            logger.debug(r.headers)
-            if 'X-GPGAuth-Debug' in r.headers:
-                raise GPGAuthStage0Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
-            else:
-                raise validation_errors.pop()
-
-        if r.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
+        if server_verify_response.headers['X-GPGAuth-Verify-Response'] != self._nonce0:
             raise GPGAuthStage0Exception(
                 'The server decrypted something different than what we sent '
                 '(%s <> %s)' %
-                (r.headers['X-GPGAuth-Verify-Response'], self._nonce0))
-        self._server_identity_verified = True
-        logger.info('server_identity_verified(): OK')
+                (server_verify_response.headers['X-GPGAuth-Verify-Response'], self._nonce0))
+        logger.info('server_identity_is_verified: OK')
+        return True
 
     def logged_in(self):
         """ GPGAuth Stage1 """
@@ -315,6 +283,6 @@ class GPGAuthSession(Session):
         self.authenticated_with_token()
 
     # GPGAuth stages in numerical form
-    stage0 = server_identity_verified
+    stage0 = server_identity_is_verified
     stage1 = logged_in
     stage2 = authenticated_with_token

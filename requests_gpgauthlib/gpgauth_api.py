@@ -22,3 +22,15 @@ logger = logging.getLogger(__name__)
 
 def get_verify(session):
     return session.get(session.gpgauth_uri('/verify.json'))
+
+
+def post_server_verify_token(session, keyid='', server_verify_token=''):
+    return session.post(
+        session.gpgauth_uri('/verify.json'),
+        json={
+          'gpg_auth': {
+              'keyid': keyid,
+              'server_verify_token': server_verify_token
+          }
+        }
+    )

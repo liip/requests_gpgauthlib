@@ -50,6 +50,26 @@ def check_verify(response, check_content=False):
     return True
 
 
+def check_server_verify_response(response):
+    if response.headers['X-GPGAuth-Authenticated'] != 'false':
+        logger.warning('Stage0: X-GPGAuth-Authenticated should be set to false')
+        return False
+    if response.headers['X-GPGAuth-Progress'] != 'stage0':
+        logger.warning('Stage0: X-GPGAuth-Progress should be set to stage0')
+        return False
+    if 'X-GPGAuth-User-Auth-Token' in response.headers:
+        logger.warning('Stage0: X-GPGAuth-User-Auth-Token should not be set')
+        return False
+    if 'X-GPGAuth-Verify-Response' not in response.headers:
+        logger.warning('Stage0: X-GPGAuth-Verify-Response should be set')
+        return False
+    if 'X-GPGAuth-Refer' in response.headers:
+        logger.warning('Stage0: X-GPGAuth-Refer should not be set')
+        return False
+
+    return True
+
+
 def get_server_fingerprint(response_json):
     return response_json['body']['fingerprint']
 
