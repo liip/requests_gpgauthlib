@@ -142,28 +142,28 @@ class TestGPGAuthSession:
 
     def test_server_identity_is_verified_raises(self, requests_mock):
         requests_mock.post('/auth/verify.json',
-                          headers={'X-GPGAuth-Authenticated': 'true'}
-                          )
+                           headers={'X-GPGAuth-Authenticated': 'true'}
+                           )
         with pytest.raises(GPGAuthStage0Exception):
             assert self.ga.server_identity_is_verified
 
     def test_server_identity_is_verified_wrong_nonce_raises(self, requests_mock):
         requests_mock.post('/auth/verify.json',
-                          headers={
-                              'X-GPGAuth-Authenticated': 'false',
-                              'X-GPGAuth-Progress': 'stage0',
-                              'X-GPGAuth-Verify-Response': 'broken_nonce',
-                          }
-                          )
+                           headers={
+                             'X-GPGAuth-Authenticated': 'false',
+                             'X-GPGAuth-Progress': 'stage0',
+                             'X-GPGAuth-Verify-Response': 'broken_nonce',
+                             }
+                           )
         with pytest.raises(GPGAuthStage0Exception):
             assert self.ga.server_identity_is_verified
 
     def test_server_identity_is_verified_wrong_signature_raises(self, requests_mock):
         requests_mock.post('/auth/verify.json',
-                          headers={
-                              'X-GPGAuth-Authenticated': 'false',
-                              'X-GPGAuth-Progress': 'stage0',
-                              'X-GPGAuth-Verify-Response': self.ga._nonce0,
-                          }
-                          )
+                           headers={
+                             'X-GPGAuth-Authenticated': 'false',
+                             'X-GPGAuth-Progress': 'stage0',
+                             'X-GPGAuth-Verify-Response': self.ga._nonce0,
+                             }
+                           )
         assert self.ga.server_identity_is_verified
