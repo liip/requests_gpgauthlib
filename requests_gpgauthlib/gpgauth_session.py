@@ -27,7 +27,8 @@ from requests import Session
 
 from .gpgauth_api import get_verify, post_server_verify_token, post_log_in, check_session_is_valid
 from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
-                               check_server_login_stage1_response, check_server_login_stage2_response, GPGAUTH_SUPPORTED_VERSION)
+                               check_server_login_stage1_response, check_server_login_stage2_response,
+                               GPGAUTH_SUPPORTED_VERSION)
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -39,13 +40,11 @@ class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
 
-    def __init__(self, gpg, server_url, auth_uri, **kwargs):
+    def __init__(self, gpg, server_url, auth_uri='/auth/', **kwargs):
         """Construct a new GPGAuth client session.
         :param gpg: GPG object to handle crypto stuff
         :param server_url: URL to the server, eg. https://gpg.example.com/
         :param auth_uri: URI to the GPGAuth endpoint (…/auth/), used as a prefix for all auth URIs
-        :param server_fingerprint: Full PGP fingerprint of the server
-        :param server_url: Full PGP fingerprint of the server
         :param kwargs: Arguments to pass to the Session constructor.
         """
         super(GPGAuthSession, self).__init__(**kwargs)
@@ -212,6 +211,7 @@ class GPGAuthSession(Session):
             return True
         # Clear all caches, start the authentication from scratch
         type(self).user_auth_token.fget.cache_clear()
+        type(self)._nonce0.fget.cache_clear()
         type(self).is_authenticated_with_token.fget.cache_clear()
         return self.is_authenticated_with_token
 

@@ -25,7 +25,8 @@ from urllib.parse import quote
 from requests_gpgauthlib.gpgauth_protocol import GPGAUTH_SUPPORTED_VERSION
 from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir
 from requests_gpgauthlib.gpgauth_session import GPGAuthSession
-from requests_gpgauthlib.exceptions import GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception
+from requests_gpgauthlib.exceptions import (GPGAuthException, GPGAuthStage0Exception, GPGAuthStage1Exception,
+                                            GPGAuthStage2Exception)
 
 
 @pytest.fixture
@@ -211,3 +212,23 @@ class TestGPGAuthSession:
                              }
                            )
         assert self.ga.user_auth_token
+
+    def test_is_authenticated_with_token_raises_with_wrong_headers(self, requests_mock):
+        requests_mock.post('/auth/login.json',
+                           headers={
+                             'X-GPGAuth-Authenticated': 'true',
+                             'X-GPGAuth-Progress': 'complete'
+                             }
+                           )
+        with pytest.raises(GPGAuthStage2Exception):
+            assert self.ga.is_authenticated_with_token
+
+    def test_is_authenticated_with_token(self, requests_mock):
+        requests_mock.post('/auth/login.json',
+                           headers={
+                             'X-GPGAuth-Authenticated': 'true',
+                             'X-GPGAuth-Progress': 'complete',
+                             'X-GPGAuth-Refer': 'exists'
+                             }
+                           )
+        assert self.ga.is_authenticated_with_token
