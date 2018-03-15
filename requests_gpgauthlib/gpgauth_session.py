@@ -185,7 +185,7 @@ class GPGAuthSession(Session):
         if not user_auth_token.ok:
             raise GPGAuthStage1Exception("Auth token decryption failed")
 
-        logger.info('user_auth_token(): %s', user_auth_token)
+        logger.info('user_auth_token: %s', user_auth_token)
         return str(user_auth_token)
 
     @property
@@ -202,7 +202,7 @@ class GPGAuthSession(Session):
         if not check_server_login_stage2_response(server_login_response):
             raise GPGAuthStage2Exception("Login endpoint wrongly formatted")
         self.cookies.save()
-        logger.info('authenticated_with_token(): OK')
+        logger.info('is_authenticated_with_token: OK')
         return True
 
     def authenticate(self):

@@ -108,6 +108,6 @@ def check_server_login_stage2_response(response):
         logger.warning('Stage2: X-GPGAuth-Verify-Response should not be set')
         return False
     if 'X-GPGAuth-Refer' not in response.headers:
-        logger.warning('Stage2: X-GPGAuth-Refer should  be set')
+        logger.warning('Stage2: X-GPGAuth-Refer should be set')
         return False
     return True
