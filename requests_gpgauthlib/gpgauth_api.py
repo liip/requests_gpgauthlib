@@ -39,12 +39,13 @@ def post_server_verify_token(session, keyid, server_verify_token):
     )
 
 
-def post_log_in(session, keyid):
+def post_log_in(session, keyid, user_token_result=None):
     return session.post(
         session.gpgauth_uri(GPGAUTH_LOGIN_URI),
         json={
             'gpg_auth': {
-                'keyid': keyid
+                'keyid': keyid,
+                'user_token_result': user_token_result
             }
         }
     )

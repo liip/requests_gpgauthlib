@@ -27,7 +27,7 @@ from requests import Session
 
 from .gpgauth_api import get_verify, post_server_verify_token, post_log_in
 from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
-                               check_server_login_response, GPGAUTH_SUPPORTED_VERSION)
+                               check_server_login_stage1_response, check_server_login_stage2_response, GPGAUTH_SUPPORTED_VERSION)
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
                          GPGAuthStage2Exception)
 from .utils import get_workdir
@@ -165,7 +165,7 @@ class GPGAuthSession(Session):
             keyid=self.user_fingerprint
         )
 
-        if not check_server_login_response(server_login_response):
+        if not check_server_login_stage1_response(server_login_response):
             raise GPGAuthStage1Exception("Login endpoint wrongly formatted")
 
         # Get the encrypted User Auth Token
@@ -191,46 +191,22 @@ class GPGAuthSession(Session):
         logger.info('user_auth_token(): %s', user_auth_token)
         return str(user_auth_token)
 
-    def authenticated_with_token(self):
+    @property
+    def is_authenticated_with_token(self):
         """ GPGAuth Stage 2 """
         """ Send back the token to the server to get auth cookie """
 
-        r = self.post(self.gpgauth_uri(self.LOGIN_URI),
-                      json={'gpg_auth': {
-                          'keyid': self.user_fingerprint,
-                          'user_token_result': self.user_auth_token,
-                          }}
-                      )
-        validation_errors = []
-        if r.headers['X-GPGAuth-Authenticated'] != 'true':
-            validation_errors.append(
-                GPGAuthStage2Exception(
-                    'X-GPGAuth-Authenticated should be set to true'))
-        if r.headers['X-GPGAuth-Progress'] != 'complete':
-            validation_errors.append(
-                GPGAuthStage2Exception(
-                    'X-GPGAuth-Progress should be set to complete'))
-        if 'X-GPGAuth-User-Auth-Token' in r.headers:
-            validation_errors.append(
-                GPGAuthStage2Exception(
-                    'X-GPGAuth-User-Auth-Token should not be set'))
-        if 'X-GPGAuth-Verify-Response' in r.headers:
-            validation_errors.append(
-                GPGAuthStage2Exception(
-                    'X-GPGAuth-Verify-Response should not be set'))
-        if 'X-GPGAuth-Refer' not in r.headers:
-            validation_errors.append(
-                GPGAuthStage2Exception(
-                    'X-GPGAuth-Refer should be set'))
+        server_login_response = post_log_in(
+            self,
+            keyid=self.user_fingerprint,
+            user_token_result=self.user_auth_token
+        )
 
-        if validation_errors:
-            logger.debug(r.headers)
-            if 'X-GPGAuth-Debug' in r.headers:
-                raise GPGAuthStage2Exception('The server indicated "%s"' % r.headers['X-GPGAuth-Debug'])
-            else:
-                raise validation_errors.pop()
+        if not check_server_login_stage2_response(server_login_response):
+            raise GPGAuthStage2Exception("Login endpoint wrongly formatted")
         self.cookies.save()
         logger.info('authenticated_with_token(): OK')
+        return True
 
     def is_authenticated(self):
         r = self.get(self.gpgauth_uri(self.CHECKSESSION_URI))
@@ -244,4 +220,4 @@ class GPGAuthSession(Session):
     # GPGAuth stages in numerical form
     stage0 = server_identity_is_verified
     stage1 = user_auth_token
-    stage2 = authenticated_with_token
+    stage2 = is_authenticated_with_token

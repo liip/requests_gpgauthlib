@@ -75,7 +75,7 @@ def get_server_keydata(response_json):
     return response_json['body']['keydata']
 
 
-def check_server_login_response(response):
+def check_server_login_stage1_response(response):
     if response.headers.get('X-GPGAuth-Authenticated') != 'false':
         logger.warning('Stage1: X-GPGAuth-Authenticated should be set to false')
         return False
@@ -90,5 +90,24 @@ def check_server_login_response(response):
         return False
     if 'X-GPGAuth-Refer' in response.headers:
         logger.warning('Stage1: X-GPGAuth-Refer should not be set')
+        return False
+    return True
+
+
+def check_server_login_stage2_response(response):
+    if response.headers.get('X-GPGAuth-Authenticated') != 'true':
+        logger.warning('Stage2: X-GPGAuth-Authenticated should be set to true')
+        return False
+    if response.headers.get('X-GPGAuth-Progress') != 'complete':
+        logger.warning('Stage2: X-GPGAuth-Progress should be set to complete')
+        return False
+    if 'X-GPGAuth-User-Auth-Token' in response.headers:
+        logger.warning('Stage2: X-GPGAuth-User-Auth-Token should not be set')
+        return False
+    if 'X-GPGAuth-Verify-Response' in response.headers:
+        logger.warning('Stage2: X-GPGAuth-Verify-Response should not be set')
+        return False
+    if 'X-GPGAuth-Refer' not in response.headers:
+        logger.warning('Stage2: X-GPGAuth-Refer should  be set')
         return False
     return True
