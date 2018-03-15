@@ -25,7 +25,7 @@ from uuid import uuid4
 
 from requests import Session
 
-from .gpgauth_api import get_verify, post_server_verify_token, post_log_in
+from .gpgauth_api import get_verify, post_server_verify_token, post_log_in, check_session_is_valid
 from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
                                check_server_login_stage1_response, check_server_login_stage2_response, GPGAUTH_SUPPORTED_VERSION)
 from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
@@ -38,9 +38,6 @@ logger = logging.getLogger(__name__)
 class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
-    VERIFY_URI = '/verify.json'
-    LOGIN_URI = '/login.json'
-    CHECKSESSION_URI = '/checkSession.json'
 
     def __init__(self, gpg, server_url, auth_uri, **kwargs):
         """Construct a new GPGAuth client session.
@@ -208,14 +205,10 @@ class GPGAuthSession(Session):
         logger.info('authenticated_with_token(): OK')
         return True
 
-    def is_authenticated(self):
-        r = self.get(self.gpgauth_uri(self.CHECKSESSION_URI))
-        return r.status_code not in [401, 403]
-
     def authenticate(self):
-        if self.is_authenticated():
-            return
-        self.authenticated_with_token()
+        if check_session_is_valid(self):
+            return True
+        return self.is_authenticated_with_token
 
     # GPGAuth stages in numerical form
     stage0 = server_identity_is_verified
