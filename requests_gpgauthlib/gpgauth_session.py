@@ -58,7 +58,7 @@ class GPGAuthSession(Session):
         self._cookie_filename = os.path.join(get_workdir(), 'gpgauth_session_cookies')
         self.cookies = MozillaCookieJar(self._cookie_filename)
         try:
-            self.cookies.load()
+            self.cookies.load(ignore_discard=True)
         except FileNotFoundError:
             pass
 
@@ -201,7 +201,7 @@ class GPGAuthSession(Session):
 
         if not check_server_login_stage2_response(server_login_response):
             raise GPGAuthStage2Exception("Login endpoint wrongly formatted")
-        self.cookies.save()
+        self.cookies.save(ignore_discard=True)
         logger.info('is_authenticated_with_token: OK')
         return True
 
