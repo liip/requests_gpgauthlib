@@ -150,6 +150,7 @@ class GPGAuthSession(Session):
         return True
 
     @property
+    @lru_cache()
     def user_auth_token(self):
         """ GPGAuth Stage1 """
 
@@ -189,6 +190,7 @@ class GPGAuthSession(Session):
         return str(user_auth_token)
 
     @property
+    @lru_cache()
     def is_authenticated_with_token(self):
         """ GPGAuth Stage 2 """
         """ Send back the token to the server to get auth cookie """
@@ -208,6 +210,9 @@ class GPGAuthSession(Session):
     def authenticate(self):
         if check_session_is_valid(self):
             return True
+        # Clear all caches, start the authentication from scratch
+        type(self).user_auth_token.fget.cache_clear()
+        type(self).is_authenticated_with_token.fget.cache_clear()
         return self.is_authenticated_with_token
 
     # GPGAuth stages in numerical form

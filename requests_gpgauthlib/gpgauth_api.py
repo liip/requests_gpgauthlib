@@ -52,5 +52,7 @@ def post_log_in(session, keyid, user_token_result=None):
     )
 
 def check_session_is_valid(session):
+    if not session.cookies:
+        return False
     check = session.get(session.gpgauth_uri(GPGAUTH_CHECKSESSION_URI))
     return (check.status_code == 200)
