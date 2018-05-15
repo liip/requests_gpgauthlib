@@ -29,8 +29,8 @@ from .gpgauth_api import get_verify, post_server_verify_token, post_log_in, chec
 from .gpgauth_protocol import (check_verify, get_server_keydata, get_server_fingerprint, check_server_verify_response,
                                check_server_login_stage1_response, check_server_login_stage2_response,
                                GPGAUTH_SUPPORTED_VERSION)
-from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthStage0Exception, GPGAuthStage1Exception,
-                         GPGAuthStage2Exception)
+from .exceptions import (GPGAuthException, GPGAuthNoSecretKeyError, GPGAuthTooManySecretKeysError,
+                         GPGAuthStage0Exception, GPGAuthStage1Exception, GPGAuthStage2Exception)
 from .utils import get_workdir
 
 logger = logging.getLogger(__name__)
@@ -40,11 +40,13 @@ class GPGAuthSession(Session):
     """GPGAuth extension to :class:`requests.Session`.
     """
 
-    def __init__(self, gpg, server_url, auth_uri='/auth/', **kwargs):
+    def __init__(self, gpg, server_url, auth_uri='/auth/', user_fingerprint=None, **kwargs):
         """Construct a new GPGAuth client session.
         :param gpg: GPG object to handle crypto stuff
         :param server_url: URL to the server, eg. https://gpg.example.com/
         :param auth_uri: URI to the GPGAuth endpoint (…/auth/), used as a prefix for all auth URIs
+        :param user_fingerprint: full PGP fingerprint (no whitespace) of the user key to be used
+                                 (useful in case of multiple keys in one keyring)
         :param kwargs: Arguments to pass to the Session constructor.
         """
         super(GPGAuthSession, self).__init__(**kwargs)
@@ -53,6 +55,7 @@ class GPGAuthSession(Session):
         self.auth_uri = auth_uri.rstrip('/')
 
         self.gpg = gpg
+        self.user_specified_fingerprint = user_fingerprint
 
         self._cookie_filename = os.path.join(get_workdir(), 'gpgauth_session_cookies')
         self.cookies = MozillaCookieJar(self._cookie_filename)
@@ -114,8 +117,19 @@ class GPGAuthSession(Session):
             raise GPGAuthNoSecretKeyError(
                 'No user fingerprint was loaded! You need to call import_user_private_key_from_file() first!'
             )
-        # Assume the main key is the first
-        return secret_keys.fingerprints[0]
+        if self.user_specified_fingerprint and self.user_specified_fingerprint in secret_keys.fingerprints:
+            # One was specified and we have it.
+            fingerprint = self.user_specified_fingerprint
+        elif len(secret_keys.fingerprints) == 1:
+            # We only got one, give it.
+            fingerprint = secret_keys.fingerprints[0]
+        else:
+            raise GPGAuthTooManySecretKeysError(
+                'GPG Keyring has too many secret keys! You need to specify which one to use!',
+                secret_keys.fingerprints
+            )
+
+        return fingerprint
 
     @property
     @lru_cache()
