@@ -38,6 +38,10 @@ class GPGAuthStage2Exception(GPGAuthException):
     pass
 
 
+class GPGAuthTooManySecretKeysError(GPGAuthException):
+    pass
+
+
 class GPGAuthNoSecretKeyError(GPGAuthException):
     pass
 
