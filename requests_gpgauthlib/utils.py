@@ -9,6 +9,12 @@ from .exceptions import GPGAuthKeyImportError
 logger = logging.getLogger(__name__)
 
 
+def format_protocol_error(identifier, response, message):
+    gpgauth_debug = response.headers.get('X-GPGAuth-Debug')
+    debug_info = ' (Debug: {})'.format(gpgauth_debug) if gpgauth_debug else ''
+    return '{identifier}: {message}{debug_info}'.format(identifier=identifier, message=message, debug_info=debug_info)
+
+
 def get_workdir():
     _userhome = os.environ.get('HOME')
     if not _userhome:
