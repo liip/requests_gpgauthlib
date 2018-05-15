@@ -17,6 +17,8 @@
 
 import logging
 
+from .utils import format_protocol_error
+
 logger = logging.getLogger(__name__)
 
 # This is passbolt_api's version
@@ -26,43 +28,48 @@ GPGAUTH_SUPPORTED_VERSION = '1.3.0'
 def check_verify(response, check_content=False):
     if response.headers.get('X-GPGAuth-Version') != GPGAUTH_SUPPORTED_VERSION:
         logger.warning(
-            "GPGAuth Version not supported (%s != %s)",
-            response.headers.get('X-GPGAuth-Version'),
-            GPGAUTH_SUPPORTED_VERSION
+            format_protocol_error(
+                'verify',
+                response,
+                "GPGAuth Version not supported (%s != %s)" % (
+                    response.headers.get('X-GPGAuth-Version'),
+                    GPGAUTH_SUPPORTED_VERSION
+                )
+            )
         )
         return False
     if check_content:
         try:
             j = response.json()
         except ValueError:
-            logger.warning("GPGAuth Verify body is no json")
+            logger.warning(format_protocol_error('verify', response, "GPGAuth Verify body is no json"))
             return False
         if 'body' not in j:
-            logger.warning("GPGAuth Verify has no body")
+            logger.warning(format_protocol_error('verify', response, "GPGAuth Verify has no body"))
             return False
         if 'fingerprint' not in j['body']:
-            logger.warning("GPGAuth Verify body has no fingerprint")
+            logger.warning(format_protocol_error('verify', response, "GPGAuth Verify body has no fingerprint"))
         if 'keydata' not in j['body']:
-            logger.warning("GPGAuth Verify body has no keydata")
+            logger.warning(format_protocol_error('verify', response, "GPGAuth Verify body has no keydata"))
             return False
     return True
 
 
 def check_server_verify_response(response):
     if response.headers.get('X-GPGAuth-Authenticated') != 'false':
-        logger.warning('Stage0: X-GPGAuth-Authenticated should be set to false')
+        logger.warning(format_protocol_error('Stage0', response, 'X-GPGAuth-Authenticated should be set to false'))
         return False
     if response.headers.get('X-GPGAuth-Progress') != 'stage0':
-        logger.warning('Stage0: X-GPGAuth-Progress should be set to stage0')
+        logger.warning(format_protocol_error('Stage0', response, 'X-GPGAuth-Progress should be set to stage0'))
         return False
     if 'X-GPGAuth-User-Auth-Token' in response.headers:
-        logger.warning('Stage0: X-GPGAuth-User-Auth-Token should not be set')
+        logger.warning(format_protocol_error('Stage0', response, 'X-GPGAuth-User-Auth-Token should not be set'))
         return False
     if 'X-GPGAuth-Verify-Response' not in response.headers:
-        logger.warning('Stage0: X-GPGAuth-Verify-Response should be set')
+        logger.warning(format_protocol_error('Stage0', response, 'X-GPGAuth-Verify-Response should be set'))
         return False
     if 'X-GPGAuth-Refer' in response.headers:
-        logger.warning('Stage0: X-GPGAuth-Refer should not be set')
+        logger.warning(format_protocol_error('Stage0', response, 'X-GPGAuth-Refer should not be set'))
         return False
     return True
 
@@ -77,37 +84,37 @@ def get_server_keydata(response_json):
 
 def check_server_login_stage1_response(response):
     if response.headers.get('X-GPGAuth-Authenticated') != 'false':
-        logger.warning('Stage1: X-GPGAuth-Authenticated should be set to false')
+        logger.warning(format_protocol_error('Stage1', response, 'X-GPGAuth-Authenticated should be set to false'))
         return False
     if response.headers.get('X-GPGAuth-Progress') != 'stage1':
-        logger.warning('Stage1: X-GPGAuth-Progress should be set to stage1')
+        logger.warning(format_protocol_error('Stage1', response, 'X-GPGAuth-Progress should be set to stage1'))
         return False
     if 'X-GPGAuth-User-Auth-Token' not in response.headers:
-        logger.warning('Stage1: X-GPGAuth-User-Auth-Token should be set')
+        logger.warning(format_protocol_error('Stage1', response, 'X-GPGAuth-User-Auth-Token should be set'))
         return False
     if 'X-GPGAuth-Verify-Response' in response.headers:
-        logger.warning('Stage1: X-GPGAuth-Verify-Response should not be set')
+        logger.warning(format_protocol_error('Stage1', response, 'X-GPGAuth-Verify-Response should not be set'))
         return False
     if 'X-GPGAuth-Refer' in response.headers:
-        logger.warning('Stage1: X-GPGAuth-Refer should not be set')
+        logger.warning(format_protocol_error('Stage1', response, 'X-GPGAuth-Refer should not be set'))
         return False
     return True
 
 
 def check_server_login_stage2_response(response):
     if response.headers.get('X-GPGAuth-Authenticated') != 'true':
-        logger.warning('Stage2: X-GPGAuth-Authenticated should be set to true')
+        logger.warning(format_protocol_error('Stage2', response, 'X-GPGAuth-Authenticated should be set to true'))
         return False
     if response.headers.get('X-GPGAuth-Progress') != 'complete':
-        logger.warning('Stage2: X-GPGAuth-Progress should be set to complete')
+        logger.warning(format_protocol_error('Stage2', response, 'X-GPGAuth-Progress should be set to complete'))
         return False
     if 'X-GPGAuth-User-Auth-Token' in response.headers:
-        logger.warning('Stage2: X-GPGAuth-User-Auth-Token should not be set')
+        logger.warning(format_protocol_error('Stage2', response, 'X-GPGAuth-User-Auth-Token should not be set'))
         return False
     if 'X-GPGAuth-Verify-Response' in response.headers:
-        logger.warning('Stage2: X-GPGAuth-Verify-Response should not be set')
+        logger.warning(format_protocol_error('Stage2', response, 'X-GPGAuth-Verify-Response should not be set'))
         return False
     if 'X-GPGAuth-Refer' not in response.headers:
-        logger.warning('Stage2: X-GPGAuth-Refer should be set')
+        logger.warning(format_protocol_error('Stage2', response, 'X-GPGAuth-Refer should be set'))
         return False
     return True

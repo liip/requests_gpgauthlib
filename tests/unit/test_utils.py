@@ -24,9 +24,20 @@ from mock import call, patch
 from tempfile import NamedTemporaryFile
 from tempfile import TemporaryDirectory
 from test.support import EnvironmentVarGuard
+from unittest import mock
 
-from requests_gpgauthlib.utils import create_gpg, get_temporary_workdir, get_workdir, import_user_private_key_from_file
+from requests_gpgauthlib.utils import (
+    create_gpg, format_protocol_error, get_temporary_workdir, get_workdir, import_user_private_key_from_file
+)
 from requests_gpgauthlib.exceptions import GPGAuthKeyImportError
+
+
+def test_format_protocol_error():
+    r = mock.Mock(headers={})
+    assert format_protocol_error('id', r, 'message') == 'id: message'
+
+    r2 = mock.Mock(headers={'X-GPGAuth-Debug': 'beetle'})
+    assert format_protocol_error('id', r2, 'message') == 'id: message (Debug: beetle)'
 
 
 @patch('os.makedirs')
