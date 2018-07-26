@@ -185,6 +185,7 @@ class GPGAuthSession(Session):
             .replace('\\\\', '\\')
         ).replace('\\ ', ' ')
 
+        logger.debug('User token to decrypt: %s', encrypted_user_auth_token)
         logger.info('Decrypting the user authentication token; '
                     'password prompt expected')
 
@@ -197,7 +198,7 @@ class GPGAuthSession(Session):
         user_auth_token = self.gpg.decrypt(encrypted_user_auth_token, always_trust=True, passphrase=passphrase)
 
         if not user_auth_token.ok:
-            raise GPGAuthStage1Exception("Auth token decryption failed")
+            raise GPGAuthStage1Exception("Auth token decryption failed: %s", user_auth_token.status)
 
         logger.info('user_auth_token: %s', user_auth_token)
         return str(user_auth_token)
