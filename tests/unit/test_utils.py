@@ -19,7 +19,7 @@ import logging
 import pytest
 import os
 
-from gnupg import GPG
+from pretty_bad_protocol.gnupg import GPG
 from mock import call, patch
 from tempfile import NamedTemporaryFile
 from tempfile import TemporaryDirectory
@@ -107,7 +107,7 @@ def test_create_gpg_gives_a_GPG_object():
 def test_create_gpg_has_its_home_where_we_say_we_want_it():
     workdir = get_temporary_workdir()
     gpg = create_gpg(workdir.name)
-    assert workdir.name in gpg.gnupghome
+    assert workdir.name in gpg.homedir
 
 
 def test_import_user_private_key_from_inexistant_file_raises():
@@ -130,8 +130,8 @@ def test_import_user_private_key_from_file_works(caplog):
     gpg_generator = create_gpg(gpg_generator_home.name)
 
     # Generate a key
-    passphrase = 'test-passphrase'
-    input_data = gpg_generator.gen_key_input(key_length=1024, passphrase=passphrase)
+    input_data = gpg_generator.gen_key_input(name_email='Test Import User <import@example.com>',
+                                             key_length=1024, passphrase=None, testing=True)
 
     # Generate the key, making sure it worked
     key = gpg_generator.gen_key(input_data)
@@ -140,8 +140,7 @@ def test_import_user_private_key_from_file_works(caplog):
     # Export the key, making sure it worked
     key_asc = gpg_generator.export_keys(
         key.fingerprint,
-        armor=True, minimal=True,
-        secret=True, passphrase=passphrase)
+        secret=True)
     assert key_asc
 
     # Create a temporary file, and use it
@@ -159,9 +158,5 @@ def test_import_user_private_key_from_file_works(caplog):
         # Check that it really worked
         assert imported_fingerprint == key.fingerprint
         # That we logged what we wanted
-        assert caplog.record_tuples == [
-            ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected'),
-            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint),
-            # FIXME: Check why that message is output twice
-            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint)
-        ]
+        assert ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected') in caplog.record_tuples
+        assert ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint) in caplog.record_tuples
