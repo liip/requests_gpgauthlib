@@ -158,5 +158,11 @@ def test_import_user_private_key_from_file_works(caplog):
         # Check that it really worked
         assert imported_fingerprint == key.fingerprint
         # That we logged what we wanted
-        assert ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected') in caplog.record_tuples
-        assert ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint) in caplog.record_tuples
+        assert (
+            ('requests_gpgauthlib.utils', logging.INFO, 'Importing the user private key; password prompt expected')
+            in caplog.record_tuples
+        )
+        assert (
+            ('requests_gpgauthlib.utils', logging.INFO, 'GPG key 0x%s successfully imported' % key.fingerprint)
+            in caplog.record_tuples
+        )

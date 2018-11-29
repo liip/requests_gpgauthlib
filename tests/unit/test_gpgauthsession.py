@@ -47,7 +47,8 @@ class TestGPGAuthSession:
         # Setup a server
         self.server_gnupg_home = get_temporary_workdir()
         self.server_gpg = create_gpg(self.server_gnupg_home.name)
-        input_data = self.server_gpg.gen_key_input(testing=True, key_length=1024, name_email='server@inexistant.example.com')
+        input_data = self.server_gpg.gen_key_input(testing=True, key_length=1024,
+                                                   name_email='server@inexistant.example.com')
 
         # Generate the key, making sure it worked
         self.server_key = self.server_gpg.gen_key(input_data)
