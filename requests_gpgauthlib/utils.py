@@ -40,10 +40,10 @@ def get_workdir():
         _userhome = '/tmp/requests_gpgauthlib'
         try:
             os.makedirs(_userhome, exist_ok=True)
-            logger.warn('get_workdir: HOME undefined, using {}'.format(_userhome))
+            logger.warning('get_workdir: HOME undefined, using {}'.format(_userhome))
         except (OSError, IOError):
             _userhome = os.getcwd()
-            logger.warn('get_workdir: HOME undefined and /tmp unwriteable, using {}'.format(_userhome))
+            logger.warning('get_workdir: HOME undefined and /tmp unwriteable, using {}'.format(_userhome))
     workdir = os.path.join(os.path.join(_userhome, '.config'), 'requests_gpgauthlib')
 
     try:
