@@ -120,7 +120,7 @@ class GPGAuthSession(Session):
         if self.user_specified_fingerprint and self.user_specified_fingerprint in secret_keys.fingerprints:
             # One was specified and we have it.
             fingerprint = self.user_specified_fingerprint
-        elif len(secret_keys.fingerprints) == 1:
+        elif len(secret_keys) == 1:
             # We only got one, give it.
             fingerprint = secret_keys.fingerprints[0]
         else:

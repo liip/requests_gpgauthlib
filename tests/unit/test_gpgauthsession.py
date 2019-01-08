@@ -47,18 +47,15 @@ class TestGPGAuthSession:
         # Setup a server
         self.server_gnupg_home = get_temporary_workdir()
         self.server_gpg = create_gpg(self.server_gnupg_home.name)
-        self.server_passphrase = 'server-sicrit-passphrase'
-        input_data = self.server_gpg.gen_key_input(
-          key_length=1024, passphrase=self.server_passphrase, name_email='server@inexistant.example.com')
+        input_data = self.server_gpg.gen_key_input(testing=True, key_length=1024,
+                                                   name_email='server@inexistant.example.com')
 
         # Generate the key, making sure it worked
         self.server_key = self.server_gpg.gen_key(input_data)
         assert self.server_key.fingerprint
 
         # Export the key, making sure it worked
-        self.server_keydata = self.server_gpg.export_keys(
-            self.server_key.fingerprint,
-            armor=True, minimal=True, passphrase=self.server_passphrase)
+        self.server_keydata = self.server_gpg.export_keys(self.server_key.fingerprint)
         assert self.server_keydata
 
         # Setup a user
@@ -68,8 +65,9 @@ class TestGPGAuthSession:
                                  'https://inexistant.example.com/', '/auth/')
 
         self.user_passphrase = 'user-sicrit-passphrase'
-        input_data = self.gpg.gen_key_input(
-          key_length=1024, passphrase=self.user_passphrase, name_email='user@inexistant.example.com')
+        input_data = self.gpg.gen_key_input(testing=True,
+                                            key_length=1024, passphrase=self.user_passphrase,
+                                            name_email='user@inexistant.example.com')
 
         # test_user_fingerprint_raises_without_key
         with pytest.raises(GPGAuthException):
@@ -83,9 +81,7 @@ class TestGPGAuthSession:
         self.ga._user_passphrase = self.user_passphrase
 
         # Export the user key
-        self.user_keydata = self.gpg.export_keys(
-            self.user_key.fingerprint,
-            armor=True, minimal=True)
+        self.user_keydata = self.gpg.export_keys(self.user_key.fingerprint)
         assert self.user_keydata
         # … and import it in the server keyring
         import_result = self.server_gpg.import_keys(self.user_keydata)
@@ -141,9 +137,9 @@ class TestGPGAuthSession:
         assert self.ga.server_fingerprint == self.server_key.fingerprint
 
         # Check that the server key was imported
-        local_keys = {key['fingerprint']: key for key in self.gpg.list_keys()}
+        local_keys = self.gpg.list_keys()
         # Take the fingerprint from the self.ga object on purpose…
-        assert self.ga.server_fingerprint in local_keys
+        assert self.ga.server_fingerprint in local_keys.fingerprints
         # … to verifiy the get was only performed once
         assert requests_mock.call_count == 1
 
