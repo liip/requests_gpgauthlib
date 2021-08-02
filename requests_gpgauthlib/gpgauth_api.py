@@ -23,7 +23,7 @@ GPGAUTH_VERIFY_URI = '/verify.json'
 GPGAUTH_LOGIN_URI = '/login.json'
 # deprecated since v2.11.0. It extends the user session. Use /auth/is-authenticated instead.
 #GPGAUTH_CHECKSESSION_URI = '/checkSession.json'
-GPGAUTH_CHECKSESSION_URI = '/is-authenticated'
+GPGAUTH_CHECKSESSION_URI = '/is-authenticated.json'
 
 def get_verify(session):
     return session.get(session.gpgauth_uri(GPGAUTH_VERIFY_URI))
