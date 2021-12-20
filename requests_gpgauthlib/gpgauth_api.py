@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 GPGAUTH_VERIFY_URI = '/verify.json'
 GPGAUTH_LOGIN_URI = '/login.json'
-GPGAUTH_CHECKSESSION_URI = '/checkSession.json'
+GPGAUTH_CHECKSESSION_URI = '/is-authenticated.json'
 
 
 def get_verify(session):
