@@ -1,6 +1,12 @@
 requests_gpgauthlib - A requests GPGAuth authentication library
 ===============================================================
 
+Project status: frozen
+----------------------
+
+The project is not in developement anymore by Liip. See https://github.com/liip/requests_gpgauthlib/issues/17 for details; it needs a new maintaining team!
+
+
 [![Build Status](https://travis-ci.org/liip/requests_gpgauthlib.svg?branch=master)](https://travis-ci.org/liip/requests_gpgauthlib)
 
 Example usage
